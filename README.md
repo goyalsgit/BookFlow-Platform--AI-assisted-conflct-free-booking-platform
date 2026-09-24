@@ -30,15 +30,6 @@ CSV exports.
 
 ## Screenshots
 
-### Customer workspace
-
-The customer experience provides resource discovery, ranked recommendations,
-AI-assisted search, protected holds, bookings, waitlists, and notifications.
-
-<p align="center">
-  <img src="assets/screenshots/home.png" alt="BookFlow customer workspace" width="92%" />
-</p>
-
 ### Resource catalog
 
 Customers can search and browse active resources across sports courts,
