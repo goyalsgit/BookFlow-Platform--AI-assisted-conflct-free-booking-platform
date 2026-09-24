@@ -1,0 +1,18 @@
+import {useState} from 'react';
+import {Link} from 'react-router-dom';
+import {useFlow} from './context';
+import {request,dayLabel} from './api';
+import {Empty,ErrorMessage,Icon} from './ui';
+type Message={role:'user'|'assistant';content:string};
+type Suggestion={resourceId:number;serviceId:number;resourceName:string;serviceName:string;date:string;time:string;timezone:string};
+export default function Chat(){
+ const {user,signIn,workspace}=useFlow();
+ const [messages,setMessages]=useState<Message[]>([]),[text,setText]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[suggestion,setSuggestion]=useState<Suggestion|null>(null);
+ if(!user)return <Empty title="Plan your booking in a conversation" icon="spark"><p>Sign in to chat about resources, dates and times. You review every booking before confirming.</p><button className="bf-button primary" onClick={()=>signIn()}>Sign in to chat</button></Empty>;
+ return <><div className="bf-page-heading"><div><div className="bf-eyebrow">A LITTLE HELP WITH YOUR PLANS</div><h1>Let’s talk about your time<span>.</span></h1><p>Describe what you need, then review the preferences before searching.</p></div><button className="bf-button secondary" disabled={busy} onClick={()=>{setMessages([]);setSuggestion(null);setError('');}}>New conversation</button></div>
+ <section className="bf-panel bf-chat"><p className="bf-input-hint">{workspace.assistantProvider==='gemini'?'AI chat · Messages are sent to Google Gemini. Use fictional booking details for this demo.':workspace.assistantProvider==='disabled'?'Chat is disabled. Use Find a time.':'Demo chat · A simple local parser, not a live AI model. Try a resource name, tomorrow, and 6 pm.'}</p>
+ <div className="bf-chat-log" role="log" aria-live="polite" aria-label="Booking conversation">{!messages.length&&<p>What would you like to book? For example: “Badminton Court A tomorrow at 6 pm.”</p>}{messages.map((m,i)=><article key={i} className={'bf-chat-message '+m.role}><strong>{m.role==='user'?'You':'BookFlow assistant'}</strong><p>{m.content}</p></article>)}{busy&&<p role="status">Thinking about your request…</p>}</div>
+ <ErrorMessage message={error}/>
+ {suggestion&&<div className="bf-chat-suggestion"><strong>Review suggested preferences</strong><p>{suggestion.resourceName} · {suggestion.serviceName}</p><p>{dayLabel(suggestion.date)} · {suggestion.time} ({suggestion.timezone})</p><Link className="bf-button primary" to={'/planner?'+new URLSearchParams({resource:String(suggestion.resourceId),service:String(suggestion.serviceId),date:suggestion.date,time:suggestion.time})}>Review and find available times<Icon name="arrow" size={16}/></Link></div>}
+ <form onSubmit={async e=>{e.preventDefault();if(!text.trim()||busy)return;const history=[...messages,{role:'user' as const,content:text.trim()}].slice(-11);setMessages(history);setText('');setBusy(true);setError('');setSuggestion(null);try{const result=await request<{reply:string;preferences:Suggestion|null}>('/assistant/chat','POST',{messages:history});setMessages([...history,{role:'assistant',content:result.reply}]);setSuggestion(result.preferences);}catch(e:any){setError(e.message);}finally{setBusy(false);}}}><label>Your message<textarea required maxLength={1000} value={text} onChange={e=>setText(e.target.value)} placeholder="Tell me the resource, date, and time you have in mind…"/></label><button className="bf-button primary" disabled={busy||!text.trim()||workspace.assistantProvider==='disabled'}>Send message<Icon name="arrow" size={16}/></button></form><p className="bf-input-hint">Chat cannot reserve or change a booking. Availability is checked in Find a time, and again when you create a hold.</p></section></>;
+}

@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bookflow
+      POSTGRES_PASSWORD: bookflow_local
+      POSTGRES_DB: bookflow
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - bookflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookflow"]
+      interval: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    profiles: [learn-redis]
+    command: ["redis-server", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:6379:6379"
+volumes:
+  bookflow_data:

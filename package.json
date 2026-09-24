@@ -1,0 +1,33 @@
+{
+  "name": "bookflow",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Conflict-safe resource allocation with ranked alternatives and expiring holds",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w server && npm run build -w client",
+    "db:migrate": "npm run db:migrate -w server",
+    "db:seed": "npm run db:seed -w server",
+    "db:setup": "npm run db:migrate -w server && npm run db:seed -w server",
+    "test": "node scripts/test.mjs",
+    "typecheck": "npm run typecheck -w server && tsc --noEmit -p client/tsconfig.json",
+    "cleanup": "npm run cleanup -w server",
+    "start": "npm run start -w server",
+    "db:migrate:prod": "npm run db:migrate:prod -w server",
+    "db:bootstrap": "npm run db:bootstrap -w server",
+    "db:backup": "node scripts/database.mjs backup",
+    "db:restore": "node scripts/database.mjs restore",
+    "worker": "npm run worker -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prettier": "^3.9.9"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
