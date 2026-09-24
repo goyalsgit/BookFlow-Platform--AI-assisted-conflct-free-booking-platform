@@ -39,43 +39,23 @@ AI-assisted search, protected holds, bookings, waitlists, and notifications.
   <img src="assets/screenshots/home.png" alt="BookFlow customer workspace" width="92%" />
 </p>
 
-### Business operations dashboard
+### Resource catalog
 
-The admin workspace gives business owners an operational view of upcoming
-bookings, resources, schedules, and customer activity.
+Customers can search and browse active resources across sports courts,
+clinicians, lab equipment, and meeting rooms.
 
 <p align="center">
-  <img src="assets/screenshots/admin-dashboard.png" alt="BookFlow business operations dashboard" width="92%" />
+  <img src="assets/screenshots/space.png" alt="BookFlow resource catalog" width="92%" />
 </p>
 
-### Booking and resource management
+### Operations dashboard
 
-<table>
-  <tr>
-    <td width="50%" align="center">
-      <strong>Live booking flow</strong><br />
-      <sub>Service, date, and availability selection with live slot calculation.</sub><br /><br />
-      <img src="assets/screenshots/booking-flow.png" alt="BookFlow live booking flow" width="100%" />
-    </td>
-    <td width="50%" align="center">
-      <strong>Resource management</strong><br />
-      <sub>Business owners manage resources, services, schedules, and time off.</sub><br /><br />
-      <img src="assets/screenshots/admin-providers.png" alt="BookFlow resource management" width="100%" />
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" align="center">
-      <strong>Booking operations</strong><br />
-      <sub>Review, filter, and update booking status from the business workspace.</sub><br /><br />
-      <img src="assets/screenshots/admin-bookings.png" alt="BookFlow booking operations" width="100%" />
-    </td>
-    <td width="50%" align="center">
-      <strong>Day view</strong><br />
-      <sub>See scheduled activity across resources for a selected day.</sub><br /><br />
-      <img src="assets/screenshots/admin-day-view.png" alt="BookFlow day view" width="100%" />
-    </td>
-  </tr>
-</table>
+Business owners can monitor confirmed sessions, active holds, waitlist demand,
+lead time, resource commitment, and reservation outcomes from one workspace.
+
+<p align="center">
+  <img src="assets/screenshots/operations.png" alt="BookFlow operations dashboard" width="92%" />
+</p>
 
 ## What makes it special
 
