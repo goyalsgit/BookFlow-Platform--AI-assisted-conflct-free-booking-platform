@@ -1,13 +1,13 @@
-# BookFlow build steps
+# BookFlow completion checklist
 
-Product: a configurable scheduling and allocation workspace for small businesses. Resources can be people, rooms, equipment, vehicles or anything exclusively bookable. Resource types are configuration, not fixed business categories.
-
-1. [x] Inspect and preserve BookIt's database and transaction architecture and MIT license.
-2. [x] Run isolated PostgreSQL with Docker and apply versioned migrations.
+1. [x] Preserve the database transaction design and MIT license.
+2. [x] Add versioned PostgreSQL migrations and a disposable integration-test database.
 3. [x] Implement timezone-aware availability and database-enforced buffered conflicts.
-4. [x] Implement five-minute holds, confirmation, atomic changes and FIFO compatible waitlist offers.
-5. [ ] Generalize business settings, types, services and working hours in the UI.
-6. [ ] Finish and inspect the responsive customer and operations interfaces.
-7. [ ] Verify real API concurrency, permissions, lifecycle, ranking and browser journeys.
-8. [ ] Write setup and plain-language architecture/function learning guides.
-9. [ ] Report verified functionality and remaining SRS scope honestly.
+4. [x] Implement holds, confirmation, rescheduling, cancellation, and waitlist offers.
+5. [x] Add editable business details, locations, resources, services, weekly hours, and time off.
+6. [x] Add password changes, recovery, email verification, and server-side token revocation.
+7. [x] Build the client and API into one deployable image; add backup and empty-target restore commands.
+8. [x] Run the 20-test integration suite against a disposable local PostgreSQL database.
+9. [ ] Inspect complete customer and owner journeys on desktop and mobile; run accessibility checks.
+10. [ ] Deploy to staging and verify monitoring and load behavior. A local backup/restore drill passed.
+11. [ ] Verify account email and booking notification delivery with a real SMTP provider before public registration.

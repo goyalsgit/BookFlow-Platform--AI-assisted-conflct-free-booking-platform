@@ -1,12 +1,14 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { config } from '../config.js';
+import { config, production } from '../config.js';
+import { pool } from '../db/pool.js';
 
 export interface AdminClaims {
   sub: number;
   email: string;
   name: string;
   kind: 'admin';
+  sessionVersion: number;
 }
 
 export interface CustomerClaims {
@@ -14,6 +16,7 @@ export interface CustomerClaims {
   email: string;
   name: string;
   kind: 'customer';
+  sessionVersion: number;
 }
 
 declare global {
@@ -25,12 +28,24 @@ declare global {
   }
 }
 
-export function signAdminToken(claims: Omit<AdminClaims, 'kind'>) {
-  return jwt.sign({ ...claims, kind: 'admin' }, config.jwtSecret, { expiresIn: '4h' });
+export function signAdminToken(
+  claims: Omit<AdminClaims, 'kind' | 'sessionVersion'> & { sessionVersion?: number },
+) {
+  return jwt.sign(
+    { ...claims, sessionVersion: claims.sessionVersion ?? 0, kind: 'admin' },
+    config.jwtSecret,
+    { expiresIn: '7d' },
+  );
 }
 
-export function signCustomerToken(claims: Omit<CustomerClaims, 'kind'>) {
-  return jwt.sign({ ...claims, kind: 'customer' }, config.jwtSecret, { expiresIn: '8h' });
+export function signCustomerToken(
+  claims: Omit<CustomerClaims, 'kind' | 'sessionVersion'> & { sessionVersion?: number },
+) {
+  return jwt.sign(
+    { ...claims, sessionVersion: claims.sessionVersion ?? 0, kind: 'customer' },
+    config.jwtSecret,
+    { expiresIn: '30d' },
+  );
 }
 
 /** Verify the Bearer token, if any. Returns the payload or null. */
@@ -47,33 +62,57 @@ function verifyBearer(req: Request): any | null {
 
 // Both token kinds share one signing secret, so every guard must check `kind` —
 // otherwise a customer token would open the admin API.
+async function validSession(table: 'users' | 'customers', payload: any) {
+  if (!Number.isInteger(payload.sub) || !Number.isInteger(payload.sessionVersion)) return false;
+  const {
+    rows: [account],
+  } = await pool.query(`SELECT session_version,email_verified_at FROM ${table} WHERE id=$1`, [
+    payload.sub,
+  ]);
+  return (
+    !!account &&
+    account.session_version === payload.sessionVersion &&
+    (!production || !!account.email_verified_at)
+  );
+}
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const payload = verifyBearer(req);
   if (!payload || payload.kind !== 'admin') {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(401).json({ error: 'Invalid or expired token', code: 'SESSION_INVALID' });
   }
-  req.admin = payload as AdminClaims;
-  next();
+  void validSession('users', payload)
+    .then((valid) => {
+      if (!valid)
+        return res.status(401).json({ error: 'Invalid or expired token', code: 'SESSION_INVALID' });
+      req.admin = payload as AdminClaims;
+      next();
+    })
+    .catch(next);
 }
 
 export function optionalAdmin(req: Request, _res: Response, next: NextFunction) {
   const payload = verifyBearer(req);
-  if (payload && payload.kind === 'admin') req.admin = payload as AdminClaims;
-  next();
+  if (!payload || payload.kind !== 'admin') return next();
+  void validSession('users', payload)
+    .then((valid) => {
+      if (valid) req.admin = payload as AdminClaims;
+      next();
+    })
+    .catch(next);
 }
 
 export function requireCustomer(req: Request, res: Response, next: NextFunction) {
   const payload = verifyBearer(req);
   if (!payload || payload.kind !== 'customer') {
-    return res.status(401).json({ error: 'Sign in to continue' });
+    return res.status(401).json({ error: 'Sign in to continue', code: 'SESSION_INVALID' });
   }
-  req.customer = payload as CustomerClaims;
-  next();
-}
-
-/** Attaches req.customer when a valid customer token is present; never rejects. */
-export function optionalCustomer(req: Request, _res: Response, next: NextFunction) {
-  const payload = verifyBearer(req);
-  if (payload && payload.kind === 'customer') req.customer = payload as CustomerClaims;
-  next();
+  void validSession('customers', payload)
+    .then((valid) => {
+      if (!valid)
+        return res.status(401).json({ error: 'Sign in to continue', code: 'SESSION_INVALID' });
+      req.customer = payload as CustomerClaims;
+      next();
+    })
+    .catch(next);
 }

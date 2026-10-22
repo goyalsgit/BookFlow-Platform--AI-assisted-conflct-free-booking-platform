@@ -44,7 +44,7 @@ button {
   color: inherit;
 }
 button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.55;
 }
 button:focus-visible,
@@ -131,7 +131,7 @@ select {
 }
 .bf input,
 .bf textarea,
-.bf [contenteditable="true"] {
+.bf [contenteditable='true'] {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -145,6 +145,11 @@ select {
   display: flex;
   flex-direction: column;
   z-index: 20;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+.bf-sidebar > * {
+  flex-shrink: 0;
 }
 .bf-brand {
   display: flex;
@@ -329,6 +334,7 @@ select {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 .bf-topbar {
   height: 74px;
@@ -368,12 +374,25 @@ select {
   font-weight: 600;
   cursor: pointer;
 }
-.bf-top-signout:hover { border-color: #92b6a5; color: #176f58; }
-.bf-sidebar nav, .bf-topbar, .bf-filter-tabs { user-select: none; }
+.bf-top-signout:hover {
+  border-color: #92b6a5;
+  color: #176f58;
+}
+.bf-sidebar nav,
+.bf-topbar,
+.bf-filter-tabs {
+  user-select: none;
+}
 @media (max-width: 520px) {
-  .bf-top-actions { gap: 8px; }
-  .bf-top-actions .bf-timezone { display: none; }
-  .bf-top-signout { padding: 6px 8px; }
+  .bf-top-actions {
+    gap: 8px;
+  }
+  .bf-top-actions .bf-timezone {
+    display: none;
+  }
+  .bf-top-signout {
+    padding: 6px 8px;
+  }
 }
 .bf-timezone {
   display: flex;
@@ -401,6 +420,7 @@ select {
   max-width: 1540px;
   width: 100%;
   margin: auto;
+  min-width: 0;
 }
 .bf-page-heading {
   display: flex;
@@ -925,7 +945,9 @@ select {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.bf-directions-link:hover { color: #15523d; }
+.bf-directions-link:hover {
+  color: #15523d;
+}
 .bf-resource-bottom {
   border-top: 1px solid #edf0ed;
   padding-top: 14px;
@@ -2744,16 +2766,62 @@ tr:last-child td {
   color: #96a99b;
   margin-top: 6px;
 }
-.bf-place-input { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.bf-place-input > small { font-size: 11px; color: #718579; }
-.bf-place-suggestions { position: relative; z-index: 2; border: 1px solid var(--border); border-radius: 8px; background: #fff; box-shadow: 0 8px 24px #163e2718; overflow: hidden; }
-.bf-place-suggestions button { display: block; width: 100%; padding: 11px 13px; border: 0; border-bottom: 1px solid var(--border); background: #fff; text-align: left; font-size: 12px; line-height: 1.5; }
-.bf-place-suggestions button:last-child { border-bottom: 0; }
-.bf-place-suggestions button:hover,.bf-place-suggestions button:focus-visible { background: #edf6f1; }
-.bf-place-preview { display: flex; flex-direction: column; gap: 6px; }
-.bf-place-preview iframe { width: 100%; height: 230px; border: 1px solid var(--border); border-radius: 8px; }
-.bf-place-preview small { font-size: 10px; color: #718579; }
-.bf-place-preview a { text-decoration: underline; }
+.bf-place-input {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.bf-place-input > small {
+  font-size: 11px;
+  color: #718579;
+}
+.bf-place-suggestions {
+  position: relative;
+  z-index: 2;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px #163e2718;
+  overflow: hidden;
+}
+.bf-place-suggestions button {
+  display: block;
+  width: 100%;
+  padding: 11px 13px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.bf-place-suggestions button:last-child {
+  border-bottom: 0;
+}
+.bf-place-suggestions button:hover,
+.bf-place-suggestions button:focus-visible {
+  background: #edf6f1;
+}
+.bf-place-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bf-place-preview iframe {
+  width: 100%;
+  height: 230px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.bf-place-preview small {
+  font-size: 10px;
+  color: #718579;
+}
+.bf-place-preview a {
+  text-decoration: underline;
+}
 .bf-settings-resource {
   display: flex;
   align-items: center;
@@ -3252,20 +3320,252 @@ td > small {
 }
 
 /* Forms and conversation stay usable on narrow screens and with keyboard navigation. */
-.bf-resource-editor {flex-basis:100%;min-width:0;padding:16px 0;}
-.bf-resource-editor summary,.bf-session-editor summary {cursor:pointer;font-size:13px;padding:8px 0;color:#365d3f;}
-.bf-resource-editor h3 {margin:20px 0 12px;}
-.bf-session-editor {display:flex;flex-direction:column;gap:14px;margin:16px 0;padding:18px;border:1px solid var(--border);border-radius:8px;max-width:650px;}
-.bf-timeoff-row {display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;font-size:12px;}
-.bf-chat {padding:24px;max-width:850px;margin:auto;}
-.bf-chat-log {display:flex;flex-direction:column;gap:16px;margin:24px 0;max-height:55vh;overflow:auto;}
-.bf-chat-message {padding:16px;border-radius:12px;background:#f0f5ec;max-width:90%;font-size:14px;line-height:1.7;overflow-wrap:anywhere;}
-.bf-chat-message.user {align-self:flex-end;background:#e7effa;}
-.bf-chat-message p {white-space:pre-wrap;margin-top:6px;}
-.bf-chat form {display:flex;flex-direction:column;gap:16px;}
-.bf-chat textarea {min-height:95px;}
-.bf-chat-suggestion {padding:20px;border:1px solid #9ab693;border-radius:10px;margin:18px 0;}
-.bf-chat-suggestion p {margin:10px 0;font-size:13px;}
-.bf :focus-visible {outline:3px solid #397851;outline-offset:3px;}
-.bf label,.bf-input-hint,.bf-muted {color:#52654d;}
-@media(max-width:600px){.bf-chat{padding:16px}.bf-timeoff-row{align-items:flex-start;flex-direction:column}.bf-chat-message{max-width:100%}.bf-session-editor{padding:12px}.bf-session-editor .bf-form-row{grid-template-columns:1fr}}
+.bf-resource-editor {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 16px 0;
+}
+.bf-resource-editor summary,
+.bf-session-editor summary {
+  cursor: pointer;
+  font-size: 13px;
+  padding: 8px 0;
+  color: #365d3f;
+}
+.bf-resource-editor h3 {
+  margin: 20px 0 12px;
+}
+.bf-session-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-width: 650px;
+}
+.bf-timeoff-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  font-size: 12px;
+}
+.bf-chat {
+  padding: 24px;
+  max-width: 850px;
+  margin: auto;
+}
+.bf-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 24px 0;
+  max-height: 55vh;
+  overflow: auto;
+}
+.bf-chat-message {
+  padding: 16px;
+  border-radius: 12px;
+  background: #f0f5ec;
+  max-width: 90%;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.bf-chat-message.user {
+  align-self: flex-end;
+  background: #e7effa;
+}
+.bf-chat-message p {
+  white-space: pre-wrap;
+  margin-top: 6px;
+}
+.bf-chat form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bf-chat textarea {
+  min-height: 95px;
+}
+.bf-chat-suggestion {
+  padding: 20px;
+  border: 1px solid #9ab693;
+  border-radius: 10px;
+  margin: 18px 0;
+}
+.bf-chat-suggestion p {
+  margin: 10px 0;
+  font-size: 13px;
+}
+.bf-seat-pool-form {
+  margin-bottom: 24px;
+}
+.bf-seat-pool-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+.bf-seat-pool-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.bf-seat-pool-card {
+  border: 1px solid #d9e2d5;
+  border-radius: 12px;
+  padding: 18px;
+}
+.bf-seat-pool-card p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+.bf-seat-pool-card .bf-settings-actions {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.bf-seat-pool-card input {
+  max-width: 100px;
+}
+.bf-seat-layout {
+  border: 1px solid #d9e2d5;
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 0;
+}
+.bf-seat-layout legend {
+  font-weight: 700;
+  padding: 0 6px;
+}
+.bf-seat-layout .bf-settings-actions {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.bf-seat-layout .bf-settings-actions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bf-seat-layout input[type='radio'] {
+  width: auto;
+  margin: 0;
+}
+.bf-seat-grid {
+  display: grid;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 12px 0;
+}
+.bf-seat-grid-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bf-seat-row-label {
+  font-weight: 700;
+  min-width: 54px;
+}
+.bf-seat-grid-seats {
+  display: flex;
+  gap: 5px;
+}
+.bf-seat-cell {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid #8da98d;
+  border-radius: 7px;
+  background: #e5f3e3;
+  color: #1d4828;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.bf-seat-cell:hover,
+.bf-seat-cell:focus-visible {
+  outline: 2px solid #386f42;
+  outline-offset: 1px;
+}
+.bf-seat-cell.is-blocked {
+  background: #e5e5e5;
+  border-color: #a6a6a6;
+  color: #555;
+  text-decoration: line-through;
+}
+.bf :focus-visible {
+  outline: 3px solid #397851;
+  outline-offset: 3px;
+}
+.bf label,
+.bf-input-hint,
+.bf-muted {
+  color: #52654d;
+}
+@media (max-width: 600px) {
+  .bf-chat {
+    padding: 16px;
+  }
+  .bf-timeoff-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .bf-chat-message {
+    max-width: 100%;
+  }
+  .bf-session-editor {
+    padding: 12px;
+  }
+  .bf-session-editor .bf-form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Keep cards readable as the available content width changes, including zoom. */
+.bf-resource-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+.bf-resource-title,
+.bf-resource-title h3,
+.bf-resource-subtitle,
+.bf-resource-meta {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Decorative content should not push account controls below a short window. */
+@media (min-width: 701px) and (max-height: 850px) {
+  .bf-sidebar {
+    padding-top: 20px;
+  }
+  .bf-sidebar-note {
+    display: none;
+  }
+  .bf-sidebar-bottom {
+    padding-top: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .bf-sidebar {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .bf-sidebar > nav:first-of-type {
+    justify-content: flex-start;
+    width: max-content;
+    min-width: 100%;
+  }
+  .bf-sidebar > nav:first-of-type > a {
+    flex: 0 0 auto;
+    min-width: 68px;
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+server/node_modules
+client/node_modules
+server/.env
+.env
+.git
+server/outbox
+backups
+client/dist
+server/dist

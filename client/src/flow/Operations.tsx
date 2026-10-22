@@ -81,9 +81,12 @@ export default function Operations() {
   if (!admin)
     return (
       <Empty title="A clearer view of your business." icon="chart">
-        <p>Sign in as an administrator to view allocation, demand and booking activity.</p>
+        <p>
+          Sign in as a business owner to view allocation, demand and booking activity for your
+          resources.
+        </p>
         <button className="bf-button primary" onClick={() => signIn(true)}>
-          Administrator sign in
+          Business owner sign in
         </button>
       </Empty>
     );
@@ -250,9 +253,10 @@ export default function Operations() {
                               <small>{b.customer_name}</small>
                             </td>
                             <td>
-                              {dayLabel(b.starts_at,workspace.timezone)}
+                              {dayLabel(b.starts_at, workspace.timezone)}
                               <small>
-                                {timeLabel(b.starts_at,workspace.timezone)}–{timeLabel(b.ends_at,workspace.timezone)}
+                                {timeLabel(b.starts_at, workspace.timezone)}–
+                                {timeLabel(b.ends_at, workspace.timezone)}
                               </small>
                             </td>
                             <td>
@@ -332,7 +336,8 @@ export default function Operations() {
                       </strong>
                       <p>{e.detail}</p>
                       <small>
-                        {dayLabel(e.created_at,workspace.timezone)} · {timeLabel(e.created_at,workspace.timezone)} · {e.actor}
+                        {dayLabel(e.created_at, workspace.timezone)} ·{' '}
+                        {timeLabel(e.created_at, workspace.timezone)} · {e.actor}
                       </small>
                     </div>
                   </article>
@@ -373,7 +378,7 @@ function ResourceTimeOff({
 }: {
   id: number;
   name: string;
-  timezone:string;
+  timezone: string;
   schedules: { weekday: number; start_time: string; end_time: string }[];
   done: () => void;
 }) {

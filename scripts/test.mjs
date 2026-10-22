@@ -21,6 +21,11 @@ const env = {
   DATABASE_URL: url.toString(),
   BOOKFLOW_TEST_DB: testName,
   JWT_SECRET: 'bookflow-test-secret-never-production',
+  NODE_ENV: 'test',
+  AI_PROVIDER: 'mock',
+  GEMINI_API_KEY: '',
+  SMTP_HOST: '',
+  NOTIFICATION_MODE: 'file',
 };
 try {
   const migrate = spawnSync(process.execPath, ['--import', 'tsx', 'src/db/migrate.ts'], {

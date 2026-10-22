@@ -41,15 +41,15 @@ export function scoreCandidate(
   return { score: Math.round(score * 1000) / 1000, components };
 }
 export async function recommend(input: Preferences) {
-  const {
-    rows: [base],
-  } = await pool.query(
+  // Read the resource and service selected in the search form.
+  const selectedResourceResult = await pool.query(
     `SELECT p.*,o.timezone,s.duration_min,s.name AS service_name FROM providers p JOIN organizations o ON o.id=p.organization_id JOIN resource_services rs ON rs.resource_id=p.id JOIN services s ON s.id=rs.service_id WHERE p.id=$1 AND s.id=$2 AND p.active AND s.active`,
     [input.resourceId, input.serviceId],
   );
+  const base = selectedResourceResult.rows[0];
   if (!base) throw Object.assign(new Error('Resource or service not found'), { status: 404 });
   // Same type, duration and service label only: a lab session cannot become a clinical appointment.
-  const { rows: resources } = await pool.query(
+  const matchingResourcesResult = await pool.query(
     `SELECT p.*,s.id AS service_id,s.name AS service_name,l.name AS location_name FROM providers p JOIN locations l ON l.id=p.location_id JOIN resource_services rs ON rs.resource_id=p.id JOIN services s ON s.id=rs.service_id WHERE p.active AND s.active AND p.organization_id=$1 AND p.business_type=$2 AND s.duration_min=$3 AND s.name=$4 AND ($5::boolean OR p.id=$6) ORDER BY p.id LIMIT 12`,
     [
       base.organization_id,
@@ -60,22 +60,23 @@ export async function recommend(input: Preferences) {
       base.id,
     ],
   );
+  const resources = matchingResourcesResult.rows;
   const candidates = [];
   for (const resource of resources) {
     for (let day = 0; day <= input.flexDays; day++) {
       const date = addDays(input.date, day);
-      const { slots } = await computeSlots(pool, resource.id, resource.service_id, date);
-      const {
-        rows: [load],
-      } = await pool.query(
+      const availability = await computeSlots(pool, resource.id, resource.service_id, date);
+      const slots = availability.slots;
+      const demandResult = await pool.query(
         `SELECT count(*)::int AS count FROM bookings WHERE provider_id=$1 AND status='confirmed' AND (starts_at AT TIME ZONE $3)::date=$2::date`,
         [resource.id, date, base.timezone],
       );
+      const load = demandResult.rows[0];
       for (const slot of slots) {
-        const time = localTime(slot.start, base.timezone),
-          delta = minuteOfDay(time) - minuteOfDay(input.time);
-        const sameResource = resource.id === base.id,
-          sameLocation = resource.location_id === base.location_id;
+        const time = localTime(slot.start, base.timezone);
+        const delta = minuteOfDay(time) - minuteOfDay(input.time);
+        const sameResource = resource.id === base.id;
+        const sameLocation = resource.location_id === base.location_id;
         const ranked = scoreCandidate(delta, day, sameResource, sameLocation, load.count);
         const reason = [
           day === 0 ? 'Same day' : `${day} day${day === 1 ? '' : 's'} later`,

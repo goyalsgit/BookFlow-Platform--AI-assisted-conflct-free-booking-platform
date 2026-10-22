@@ -16,5 +16,15 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
   }
   const status = err.status ?? 500;
   if (status >= 500) console.error(err);
-  res.status(status).json({ error: status >= 500 ? 'An unexpected error occurred. Please try again.' : err.message ?? 'Request failed' });
+  res.status(status).json({
+    error:
+      status >= 500
+        ? 'An unexpected error occurred. Please try again.'
+        : (err.message ?? 'Request failed'),
+  });
 }
+
+/** Stop a request with an HTTP status and a readable message. */
+export const fail = (status: number, message: string): never => {
+  throw Object.assign(new Error(message), { status });
+};

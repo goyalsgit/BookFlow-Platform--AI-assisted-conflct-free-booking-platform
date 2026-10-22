@@ -2,7 +2,7 @@ import pg from 'pg';
 import { config } from '../config.js';
 
 // SQL DATE is a calendar date, never a server-local JavaScript midnight.
-pg.types.setTypeParser(1082, value => value);
+pg.types.setTypeParser(1082, (value) => value);
 
 export const pool = new pg.Pool({
   connectionString: config.databaseUrl,

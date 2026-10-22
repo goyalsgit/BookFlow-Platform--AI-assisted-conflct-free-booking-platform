@@ -57,6 +57,7 @@ export interface Booking {
 export interface QueueEntry {
   id: number;
   resource_name: string;
+  timezone: string;
   status: string;
   date: string;
   earliest_time: string;

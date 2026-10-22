@@ -1,0 +1,2 @@
+ALTER TABLE customers ADD COLUMN session_version INT NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN session_version INT NOT NULL DEFAULT 0;

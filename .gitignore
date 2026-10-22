@@ -19,6 +19,8 @@ server/.env.*
 
 # ── generated / runtime ──
 server/outbox/
+outbox/
+backups/
 
 # ── logs ──
 *.log

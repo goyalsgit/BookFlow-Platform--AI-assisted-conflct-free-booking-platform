@@ -1,9 +1,18 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { request, session, customerKey, adminKey, authChangedEvent } from './api';
+import { request } from './api';
+import { session, customerKey, adminKey, authChangedEvent } from './session';
 import type { Resource, User } from './types';
 import { Icon, ErrorMessage } from './ui';
-type Workspace = { demoMode?:boolean; assistantProvider?:string; id: number; name: string; timezone: string; cancellation_cutoff_min: number };
+type Workspace = {
+  demoMode?: boolean;
+  assistantProvider?: string;
+  id: number;
+  name: string;
+  business_type?: string;
+  timezone: string;
+  cancellation_cutoff_min: number;
+};
 type Context = {
   workspace: Workspace;
   resources: Resource[];
@@ -12,7 +21,7 @@ type Context = {
   user: User | null;
   admin: User | null;
   signIn: (admin?: boolean) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateCustomer: (user: User) => void;
   toast: (text: string) => void;
   refresh: () => void;
@@ -36,9 +45,13 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const refresh = () => {
     setLoading(true);
     setError('');
-    Promise.all([request<Workspace>('/workspace'),request<Resource[]>('/resources')])
-      .then(([workspace,resources])=>{setWorkspace(workspace);setResources(resources);})
-      .catch(e=>setError(e.message)).finally(()=>setLoading(false));
+    Promise.all([request<Workspace>('/workspace'), request<Resource[]>('/resources')])
+      .then(([workspace, resources]) => {
+        setWorkspace(workspace);
+        setResources(resources);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   };
   useEffect(refresh, []);
   useEffect(() => {
@@ -69,7 +82,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
         user,
         admin,
         signIn: (a = false) => setDialog(a ? 'admin' : 'customer'),
-        logout: () => {
+        logout: async () => {
+          const revocations: Promise<unknown>[] = [];
+          if (session()) revocations.push(request('/logout', 'POST'));
+          if (session(true)) revocations.push(request('/admin/logout', 'POST'));
+          await Promise.allSettled(revocations);
           localStorage.removeItem(customerKey);
           localStorage.removeItem(adminKey);
           setUser(null);
@@ -78,7 +95,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
         },
         updateCustomer: (next) => {
           const current = session();
-          if (current) localStorage.setItem(customerKey, JSON.stringify({ ...current, user: next }));
+          if (current)
+            localStorage.setItem(customerKey, JSON.stringify({ ...current, user: next }));
           setUser(next);
         },
         toast: setMessage,
@@ -100,8 +118,13 @@ export function FlowProvider({ children }: { children: ReactNode }) {
           mode={dialog}
           close={() => setDialog(null)}
           done={(u, business) => {
-            if (business) setAdmin(u);
-            else setUser(u);
+            if (business) {
+              setAdmin(u);
+              setUser(null);
+            } else {
+              setUser(u);
+              setAdmin(null);
+            }
             setDialog(null);
             setMessage('Welcome back. Your workspace is ready.');
             refresh();
@@ -120,14 +143,17 @@ function LoginDialog({
   close: () => void;
   done: (u: User, business: boolean) => void;
 }) {
-  const {workspace}=useFlow();
+  const { workspace } = useFlow();
   const navigate = useNavigate();
   const [selectedMode, setSelectedMode] = useState(mode);
   const [register, setRegister] = useState(false),
+    [recover, setRecover] = useState(false),
+    [info, setInfo] = useState(''),
     [email, setEmail] = useState(''),
     [password, setPassword] = useState(''),
     [name, setName] = useState(''),
     [businessName, setBusinessName] = useState(''),
+    [businessType, setBusinessType] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -153,19 +179,47 @@ function LoginDialog({
           <Icon name="grid" size={24} />
         </div>
         <div className="bf-login-roles" role="group" aria-label="Account type">
-          <button type="button" className={selectedMode === 'customer' ? 'active' : ''} onClick={() => { setSelectedMode('customer'); setRegister(false); setError(''); }}>Book a slot</button>
-          <button type="button" className={selectedMode === 'admin' ? 'active' : ''} onClick={() => { setSelectedMode('admin'); setRegister(false); setError(''); }}>Publish slots</button>
+          <button
+            type="button"
+            className={selectedMode === 'customer' ? 'active' : ''}
+            onClick={() => {
+              setSelectedMode('customer');
+              setRegister(false);
+              setRecover(false);
+              setError('');
+              setInfo('');
+            }}
+          >
+            Customer
+          </button>
+          <button
+            type="button"
+            className={selectedMode === 'admin' ? 'active' : ''}
+            onClick={() => {
+              setSelectedMode('admin');
+              setRegister(false);
+              setRecover(false);
+              setError('');
+              setInfo('');
+            }}
+          >
+            Business owner
+          </button>
         </div>
         <h2 id="login-heading">
-          {register
-            ? selectedMode === 'admin' ? 'Create your business workspace.' : 'Make room for what matters.'
-            : selectedMode === 'admin'
-              ? 'Your operations workspace.'
-              : 'Welcome to BookFlow.'}
+          {recover
+            ? 'Reset your password.'
+            : register
+              ? selectedMode === 'admin'
+                ? 'Create your business workspace.'
+                : 'Make room for what matters.'
+              : selectedMode === 'admin'
+                ? 'Your operations workspace.'
+                : 'Welcome to BookFlow.'}
         </h2>
         <p className="bf-muted">
           {selectedMode === 'admin'
-            ? 'Sign in to publish available times and manage reservations.'
+            ? 'Create your business, publish your own resources and manage reservations.'
             : 'Sign in to hold a time, confirm a booking and join a waitlist.'}
         </p>
         <form
@@ -173,17 +227,50 @@ function LoginDialog({
             e.preventDefault();
             setBusy(true);
             setError('');
+            setInfo('');
             try {
-              const result = await request<{ token: string; user: User }>(
+              if (recover) {
+                await request('/account/reset-request', 'POST', { email, kind: selectedMode });
+                setInfo('If that account exists, check its email for a reset link.');
+                return;
+              }
+              const result = await request<{
+                token?: string;
+                user?: User;
+                verificationRequired?: boolean;
+              }>(
                 selectedMode === 'admin'
-                  ? register ? '/admin/register' : '/admin/session'
-                  : register ? '/register' : '/session',
+                  ? register
+                    ? '/admin/register'
+                    : '/admin/session'
+                  : register
+                    ? '/register'
+                    : '/session',
                 'POST',
-                { email, password, ...(register ? { name, ...(selectedMode === 'admin' ? { businessName } : {}) } : {}) },
+                {
+                  email,
+                  password,
+                  ...(register
+                    ? { name, ...(selectedMode === 'admin' ? { businessName, businessType } : {}) }
+                    : {}),
+                },
               );
+              if (result.verificationRequired) {
+                setRegister(false);
+                setInfo('Check your email for a verification link, then sign in.');
+                return;
+              }
+              if (!result.token || !result.user)
+                throw new Error('The account response was incomplete.');
+              const otherKind = selectedMode === 'admin' ? 'customer' : 'admin';
+              if (session(otherKind === 'admin'))
+                await request(otherKind === 'admin' ? '/admin/logout' : '/logout', 'POST').catch(
+                  () => {},
+                );
+              localStorage.removeItem(otherKind === 'admin' ? adminKey : customerKey);
               localStorage.setItem(
                 selectedMode === 'admin' ? adminKey : customerKey,
-                JSON.stringify(result),
+                JSON.stringify({ token: result.token, user: result.user }),
               );
               done(result.user, selectedMode === 'admin');
               if (selectedMode === 'admin') navigate('/settings');
@@ -194,19 +281,53 @@ function LoginDialog({
             }
           }}
         >
-          {register && (
+          {register && !recover && (
             <>
-            {selectedMode === 'admin' && <label>Business name<input required minLength={2} maxLength={100} value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Downtown studio" /></label>}
-            <label>
-              Your name
-              <input
-                autoFocus
-                required
-                minLength={2}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
+              {selectedMode === 'admin' && (
+                <>
+                  <label>
+                    Business name
+                    <input
+                      required
+                      minLength={2}
+                      maxLength={100}
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="e.g. Downtown studio"
+                    />
+                  </label>
+                  <label>
+                    What type of business do you own?
+                    <input
+                      required
+                      minLength={2}
+                      maxLength={80}
+                      value={businessType}
+                      onChange={(e) => setBusinessType(e.target.value)}
+                      placeholder="e.g. Salon, clinic, sports turf"
+                      list="bookflow-business-types"
+                    />
+                  </label>
+                  <datalist id="bookflow-business-types">
+                    <option value="Salon" />
+                    <option value="Clinic" />
+                    <option value="Sports turf" />
+                    <option value="Studio" />
+                    <option value="Education" />
+                    <option value="Other" />
+                  </datalist>
+                </>
+              )}
+              <label>
+                Your name
+                <input
+                  autoFocus
+                  required
+                  minLength={2}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
             </>
           )}
           <label>
@@ -221,42 +342,96 @@ function LoginDialog({
               placeholder="you@example.com"
             />
           </label>
-          <label>
-            Password
-            <input
-              type="password"
-              autoComplete={register ? 'new-password' : 'current-password'}
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 8 characters"
-            />
-          </label>
+          {!recover && (
+            <label>
+              Password
+              <input
+                type="password"
+                autoComplete={register ? 'new-password' : 'current-password'}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </label>
+          )}
           <ErrorMessage message={error} />
+          {info && (
+            <p className="bf-input-hint" role="status">
+              {info}
+            </p>
+          )}
           <button className="bf-button primary full" disabled={busy}>
-            {busy ? 'Please wait…' : register ? 'Create account' : 'Sign in'}
+            {busy
+              ? 'Please wait…'
+              : recover
+                ? 'Send reset link'
+                : register
+                  ? 'Create account'
+                  : 'Sign in'}
             <Icon name="arrow" size={18} />
           </button>
         </form>
-        {!register && workspace.demoMode && (
+        {!register && !recover && workspace.demoMode && (
           <button
             className="bf-demo-button"
             onClick={() => {
-              setEmail(selectedMode === 'admin' ? 'admin@bookflow.local' : 'customer@bookflow.local');
+              setEmail(
+                selectedMode === 'admin' ? 'admin@bookflow.local' : 'customer@bookflow.local',
+              );
               setPassword(selectedMode === 'admin' ? 'admin123' : 'customer123');
             }}
           >
             Fill demo {selectedMode === 'admin' ? 'business' : 'customer'} credentials
           </button>
         )}
-        {(
+        {!register && !recover && (
+          <button
+            className="bf-text-button"
+            onClick={() => {
+              setRecover(true);
+              setError('');
+              setInfo('');
+            }}
+          >
+            Forgot password?
+          </button>
+        )}
+        {!register && !recover && (
+          <button
+            className="bf-text-button"
+            onClick={async () => {
+              try {
+                await request('/account/verify-request', 'POST', { email, kind: selectedMode });
+                setInfo('If verification is needed, check that email for a link.');
+              } catch (e: any) {
+                setError(e.message);
+              }
+            }}
+          >
+            Resend verification email
+          </button>
+        )}
+        {recover && (
+          <button
+            className="bf-text-button"
+            onClick={() => {
+              setRecover(false);
+              setInfo('');
+            }}
+          >
+            Back to sign in
+          </button>
+        )}
+        {!recover && (
           <p className="bf-login-switch">
             {register ? 'Already have an account?' : 'New here?'}{' '}
             <button
               onClick={() => {
                 setRegister(!register);
                 setError('');
+                setInfo('');
               }}
             >
               {register ? 'Sign in' : 'Create an account'}

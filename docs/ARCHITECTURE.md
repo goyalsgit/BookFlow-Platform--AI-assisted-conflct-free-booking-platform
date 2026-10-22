@@ -1,187 +1,75 @@
-# 🏗️ BookIt — Architecture
+# BookFlow architecture
 
-How the pieces fit together, from the browser down to the Postgres exclusion
-constraint that makes double-booking impossible.
+BookFlow is an npm-workspaces application with a React client, an Express API,
+and PostgreSQL. The active API is `/api/flow`; older BookIt route modules in the
+repository are not mounted. In production, Express serves the built client from
+the same origin as the API. During development, Vite proxies `/api` to Express.
 
----
-
-## 1. The big picture
-
-BookIt is an npm-workspaces monorepo with two deployable pieces that talk over a
-small JSON/REST API:
-
-```
-┌──────────────────────────┐        HTTP / JSON        ┌───────────────────────────┐
-│  client  (React + Vite)  │  ───────────────────────▶ │  server  (Express + TS)   │
-│                          │                            │                           │
-│  • customer site         │      /api/*  (public)      │  • routes  (public/admin) │
-│  • admin panel (JWT)     │ ◀───────────────────────── │  • services (slots,       │
-│                          │      /api/admin/* (JWT)    │     booking, email)       │
-└──────────────────────────┘                            └────────────┬──────────────┘
-                                                                      │  pg (SQL)
-                                                                      ▼
-                                                         ┌───────────────────────────┐
-                                                         │  PostgreSQL               │
-                                                         │  • GiST exclusion         │
-                                                         │    constraints            │
-                                                         │  • advisory locks         │
-                                                         └───────────────────────────┘
+```mermaid
+flowchart LR
+  Browser[React client] -->|/api/flow| API[Express API]
+  API -->|parameterized SQL| DB[(PostgreSQL)]
+  API -->|optional| Gemini[Gemini preference assistant]
+  DB --> Rules[Advisory locks and GiST exclusion constraint]
 ```
 
-- **client** — a Vite + React + TypeScript SPA (React Router). Two areas share one
-  build: the public customer site and the JWT-guarded `/admin` panel.
-- **server** — an Express + TypeScript API. No ORM: raw parameterised SQL through
-  `pg`, Zod validation on every request body/query.
-- **PostgreSQL** — not just a store. The database itself is the final guarantor of
-  correctness through GiST exclusion constraints and advisory locks.
+## Booking path
 
----
+The customer searches resource and service availability, then requests a
+five-minute hold. The server starts a transaction, locks that resource, expires
+old holds, and recomputes availability. A matching slot becomes a `held` booking.
+Confirmation changes it to `confirmed`; cancellation and expiry release it.
+Rescheduling checks the new slot in a transaction and preserves the old booking
+if the change fails. Waitlist promotion creates a real protected hold.
 
-## 2. Server layout
+The database exclusion constraint protects each resource's blocked range,
+including preparation and cleanup buffers. Half-open ranges permit adjacent
+bookings. The assistant provides search preferences only and cannot bypass the
+booking transaction.
 
-```
-server/src/
-├── index.ts              # app bootstrap, CORS, JSON, /api/health, routers
-├── config.ts             # typed env config (DATABASE_URL, JWT_SECRET, SMTP…)
-├── db/
-│   ├── pool.ts           # shared pg Pool
-│   ├── schema.sql        # full schema incl. exclusion constraints & types
-│   ├── migrate.ts        # creates the DB if absent + applies schema (idempotent)
-│   └── seed.ts           # demo data: 6 providers, services, schedules, bookings
-├── middleware/
-│   ├── auth.ts           # JWT verification for /api/admin/*
-│   └── errors.ts         # central error handler (maps 23P01 → 409, Zod → 400)
-├── routes/
-│   ├── public.ts         # catalog, slots, create/lookup/cancel booking, login
-│   └── admin.ts          # stats, bookings admin, providers/schedules/services
-└── services/
-    ├── slots.ts          # the availability engine
-    ├── booking.ts        # transactional booking (locks + re-validation)
-    └── email.ts          # confirmation / cancellation emails (SMTP or outbox)
-```
+## Published seat pools
 
-Everything routes through `services/` — no route handler touches booking logic or
-the slot engine directly except by calling into these modules.
+An owner may publish a seat pool for one resource and session, with exact rows,
+blocked seats, a request deadline, and a confirmation window. Ordinary direct
+bookings remain available at other times. Cross-table triggers and resource
+locking reject any direct booking whose protected time range overlaps a pool.
 
----
+After the deadline, the maintenance worker solves the waiting groups together.
+The exact branch-and-bound solver enumerates valid contiguous blocks and uses
+lexicographic objectives: maximize occupied seats, minimize separate empty
+runs, then favor older requests. If its search limit is reached, the transaction
+rolls back without issuing new offers. Assignments have a database uniqueness
+constraint per pool and seat. Confirmed and live offered seats remain occupied;
+expired or cancelled offers release their assignments for another allocation.
+An owner can withdraw a pool with no confirmed groups; its waiting requests
+and offers are cancelled and ordinary availability is restored.
 
-## 3. Data model
+## Identity and isolation
 
-| Table | Purpose |
-|-------|---------|
-| `users` | Admin accounts (bcrypt password hash). |
-| `providers` | A doctor / salon / turf, with a `type` and booking policy (slot step, min lead time, booking horizon). |
-| `services` | Per-provider offerings: name, duration, buffer, price. |
-| `schedules` | Weekly working windows per provider (guarded by an exclusion constraint so windows can't overlap). |
-| `breaks` | Recurring in-day breaks (e.g. lunch). |
-| `time_off` | One-off closures (vacations, maintenance). |
-| `customers` | Lightweight customer records keyed by email. |
-| `bookings` | The core record. Carries the `bookings_no_overlap` exclusion constraint. |
-| `booking_events` | Audit trail: created, status changes, emails sent. |
+Customer and owner accounts use bcrypt password hashes and separate JWT kinds.
+Every protected API request checks the token's session version against the
+account row. Password changes and sign-out increment that version, revoking all
+issued tokens for the account. Customer tokens expire after 30 days and owner
+tokens after seven days. Owner mutations are scoped to the owner's
+organization. PostgreSQL stores shared request-limit counters.
 
-A custom `timerange` range type backs the GiST exclusion constraints.
+New public accounts use one-time email verification links. Password recovery
+uses a separate 30-minute link. Only SHA-256 hashes of action tokens are stored;
+redeeming a recovery link also revokes issued sessions.
 
----
+## Runtime
 
-## 4. Request flow: creating a booking
+`server/src/app.ts` mounts the API, health route, and built client with an SPA
+fallback. `server/src/index.ts` starts a 15-second maintenance loop for hold
+expiry, waitlist offers, seat-pool allocation, and local notification outbox work. For multiple web
+instances, disable the loop in web containers and run one worker with a direct
+database connection. Migrations are versioned in `server/src/db/migrations`;
+the build copies the SQL files into `server/dist/db`.
 
-```
-POST /api/bookings
-  │
-  ├─ 1. Zod validates the body (providerId, serviceId, date, startTime, customer…)
-  │
-  ├─ 2. BEGIN transaction
-  │       └─ pg_advisory_xact_lock(42, provider_id)     ← serialises this provider
-  │
-  ├─ 3. Re-run the slot engine INSIDE the txn against live schedule/breaks/
-  │      time-off/existing bookings. Requested start must still be a valid slot.
-  │
-  ├─ 4. INSERT booking (status = 'confirmed')
-  │       └─ bookings_no_overlap EXCLUDE constraint is the last line of defence
-  │
-  ├─ 5. Write a booking_events row + send confirmation email
-  │
-  └─ 6. COMMIT  →  201 with booking code
-          on overlap: Postgres raises 23P01 → mapped to 409 Conflict
-```
+The active flow provides in-app notifications, local HTML outbox files, and
+optional SMTP delivery with retries.
+Prices are informational. The repository retains older payment and email modules
+that are not part of the active BookFlow API.
 
-This is the heart of the project — see [§6](#6-zero-double-booking-three-layers).
-
----
-
-## 5. The slot engine (`services/slots.ts`)
-
-Given a provider, service and date, the engine walks each working window in
-`slot_step_min` increments and keeps a candidate start time only if — after
-padding with the service's `buffer` — it clears **all** of:
-
-- recurring **breaks**,
-- one-off **time-off** periods,
-- **existing bookings** (confirmed/completed),
-- the provider's **minimum lead time**, and
-- the **booking horizon** (how far ahead booking is allowed).
-
-The same function runs both when rendering the grid *and* inside the booking
-transaction, so what the customer sees and what the server accepts can never
-drift apart.
-
----
-
-## 6. Zero double-booking: three layers
-
-Two people must never hold the same slot — even under a race between concurrent
-requests. BookIt enforces this with three independent layers:
-
-1. **Advisory lock** — `pg_advisory_xact_lock(42, provider_id)` serialises
-   concurrent attempts for the *same* provider, while different providers book
-   fully in parallel. Auto-released at commit/rollback.
-
-2. **In-transaction re-validation** — the requested start must still be a slot
-   the engine would generate *right now*. A hand-crafted API call can't book a
-   closed day or a break.
-
-3. **Postgres exclusion constraint** — the final guarantee. Even raw SQL cannot
-   persist an overlap:
-
-   ```sql
-   CONSTRAINT bookings_no_overlap EXCLUDE USING gist (
-     provider_id WITH =,
-     tstzrange(starts_at, ends_at) WITH &&
-   ) WHERE (status IN ('confirmed', 'completed'))
-   ```
-
-   The partial `WHERE` means cancelled/no-show bookings automatically free their
-   slot. A conflicting insert fails with SQLSTATE `23P01`, which the error
-   handler maps to `409 Conflict`, and the UI refreshes the slot grid.
-
----
-
-## 7. Client layout
-
-```
-client/src/
-├── App.tsx               # React Router route table (public + /admin)
-├── api.ts                # typed fetch wrapper (attaches admin JWT)
-├── format.ts             # currency / date helpers
-├── components/Layout.tsx # public shell (nav + footer)
-├── pages/                # Home, Providers (browse), ProviderDetail (booking
-│                         #   flow), Confirmation, Manage
-└── admin/                # AdminLayout, AdminLogin, Dashboard, Bookings,
-                          #   DayView, Providers, ProviderEdit
-```
-
-**Public routes:** `/`, `/browse/:type`, `/provider/:id`, `/confirmation`, `/manage`
-**Admin routes:** `/admin/login`, `/admin` (dashboard), `/admin/bookings`,
-`/admin/day`, `/admin/providers`, `/admin/providers/:id`.
-
-The admin JWT is stored client-side and attached by `api.ts`; the server verifies
-it in `middleware/auth.ts` for every `/api/admin/*` request.
-
----
-
-## 8. Email
-
-`services/email.ts` renders confirmation and cancellation emails. If `SMTP_HOST`
-is configured it sends via nodemailer; otherwise the rendered HTML is written to
-`server/outbox/*.html` so the whole flow works end-to-end with **no mail provider**
-during development.
+See [the verified flow and schema](VERIFIED_FLOW_AND_SCHEMA.md) for request
+sequences and tables, and [deployment steps](DEPLOYMENT.md) for runtime setup.

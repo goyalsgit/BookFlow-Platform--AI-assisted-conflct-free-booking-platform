@@ -8,9 +8,9 @@ BookFlow is a working local full-stack scheduling application. Customers create 
 
 **How are the two account types separated?** Customer and business credentials are in different tables and receive JWTs with different `kind` claims. Every protected API guard checks the token kind. Business management queries use the owner's organization ID, so one owner cannot edit another owner's resources. The UI offers “Book a slot” and “Publish slots.”
 
-**What can a customer do in their profile?** The active BookFlow profile shows the customer's name, email, phone, and account creation date. They can edit name and phone, open My bookings, and sign out. Email is read-only because changing a login identifier needs a verified change flow. Profile API requests use the customer ID from the verified token, not an ID submitted by the browser. Password reset/change and email verification are not implemented yet.
+**What can a customer do in their profile?** The active BookFlow profile shows the customer's name, email, phone, and account creation date. They can edit name and phone, change their password, open My bookings, and sign out. Email is read-only because changing a login identifier needs a verified change flow. Profile API requests use the customer ID from the verified token, not an ID submitted by the browser. One-time links support password recovery and verification of new public accounts.
 
-**What does sign out do?** It removes customer and business tokens from browser storage and updates the UI. The API currently uses stateless JWTs, so a copied token still works until it expires (four hours for business, eight hours for customer). Sign out is not server-side revocation. For a public product, add refresh-token/session tracking and revocation, or use server-managed sessions in secure cookies.
+**What does sign out do?** It asks the API to increment the account's session version, then removes the token from browser storage. Every protected request compares the token version against PostgreSQL, so issued tokens stop working after sign-out. A password change also revokes all issued tokens. If the sign-out request cannot reach the server, the browser still clears its local token; server-side revocation then depends on the token's normal expiry.
 
 **How do you prevent double booking?** A booking transaction takes a PostgreSQL advisory lock for the resource, expires stale holds, recomputes available slots, then inserts the hold. A GiST exclusion constraint on active booking time ranges is a final database guard even if an application path makes a mistake. Ranges are half-open, so adjacent bookings can meet at a boundary. A test sends 20 simultaneous hold requests for one slot: one succeeds and 19 receive conflicts.
 
@@ -31,11 +31,11 @@ BookFlow is a working local full-stack scheduling application. Customers create 
 
 ## Readiness: real application or prototype?
 
-It is a **working local application and project MVP**, not merely static screens. Real API/database integration tests cover booking lifecycle, concurrency, permissions, timezones, and owner signup. A production claim would require at least deployed end-to-end testing, email verification and password recovery, server-side session revocation or equivalent session design, monitoring, backup/restore drills, accessibility/security review, and load testing. Payments are not collected; prices are informational. Notifications can be in-app or local files; do not claim real email/SMS delivery without configuring and verifying it.
+It is a **working local application and project MVP**, not merely static screens. Twenty disposable-database integration tests pass across booking lifecycle, concurrency, permissions, timezones, owner signup, and account recovery. A local backup/restore drill also passed. A production claim would require deployed end-to-end testing, live SMTP verification, monitoring, off-host backups, accessibility/security review, and load testing. Payments are not collected; prices are informational. Notifications can be in-app, local files, or SMTP; do not claim live email delivery without configuring and verifying it.
 
 ## Useful demonstration
 
 1. Sign up a business, create a resource and weekly hours, and show the published slots.
 2. Sign up a customer, hold and confirm a slot, then show that the slot disappears from availability.
 3. Run `npm test` and explain the 20-request contention test and the database exclusion test.
-4. Sign out and explain the stateless JWT limitation honestly.
+4. Sign out and show that a previously issued token is rejected by the API.

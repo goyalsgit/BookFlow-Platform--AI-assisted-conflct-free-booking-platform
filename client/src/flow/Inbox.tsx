@@ -18,13 +18,23 @@ export default function Inbox() {
     }
     const load = () => {
       const sources: Promise<InboxNotice[]>[] = [];
-      if (user) sources.push(request<Notice[]>('/notifications').then((notices) =>
-        notices.map((notice) => ({ ...notice, audience: 'customer' as const }))));
-      if (admin) sources.push(request<Notice[]>('/admin/notifications').then((notices) =>
-        notices.map((notice) => ({ ...notice, audience: 'admin' as const }))));
+      if (user)
+        sources.push(
+          request<Notice[]>('/notifications').then((notices) =>
+            notices.map((notice) => ({ ...notice, audience: 'customer' as const })),
+          ),
+        );
+      if (admin)
+        sources.push(
+          request<Notice[]>('/admin/notifications').then((notices) =>
+            notices.map((notice) => ({ ...notice, audience: 'admin' as const })),
+          ),
+        );
       Promise.all(sources)
         .then((groups) => {
-          setItems(groups.flat().sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
+          setItems(
+            groups.flat().sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
+          );
           setError('');
         })
         .catch((e) => setError(e.message))
@@ -43,7 +53,11 @@ export default function Inbox() {
           <h1>
             A little update for you<span>.</span>
           </h1>
-          <p>{admin && !user ? 'Recent booking activity across your business.' : 'Booking confirmations, changes and the openings you’ve been waiting for.'}</p>
+          <p>
+            {admin && !user
+              ? 'Recent booking activity across your business.'
+              : 'Booking confirmations, changes and the openings you’ve been waiting for.'}
+          </p>
         </div>
       </div>
       <ErrorMessage message={error} />
@@ -69,7 +83,22 @@ export default function Inbox() {
                   {dayLabel(n.created_at)} · {timeLabel(n.created_at)}
                 </small>
               </div>
-              <Link to={n.audience === 'admin' ? '/operations' : '/bookings'} aria-label={n.audience === 'admin' ? 'View operations' : 'View bookings'}>
+              <Link
+                to={
+                  n.audience === 'admin'
+                    ? '/operations'
+                    : n.title.toLowerCase().includes('seat')
+                      ? '/seat-pools'
+                      : '/bookings'
+                }
+                aria-label={
+                  n.audience === 'admin'
+                    ? 'View operations'
+                    : n.title.toLowerCase().includes('seat')
+                      ? 'View seat pools'
+                      : 'View bookings'
+                }
+              >
                 <Icon name="arrow" />
               </Link>
             </article>
@@ -77,7 +106,11 @@ export default function Inbox() {
         </div>
       ) : (
         <Empty title="All quiet for now" icon="bell">
-          <p>{admin && !user ? 'Booking activity will appear here when customers hold or change a time.' : 'Updates will appear here when a booking changes or a waitlist offer arrives.'}</p>
+          <p>
+            {admin && !user
+              ? 'Booking activity will appear here when customers hold or change a time.'
+              : 'Updates will appear here when a booking changes or a waitlist offer arrives.'}
+          </p>
         </Empty>
       )}
     </>

@@ -5,39 +5,47 @@ import { request, tomorrow, dateInZone, dayLabel, timeLabel } from './api';
 import type { Candidate, Booking } from './types';
 import { Icon, ErrorMessage, Empty, typeIcon, Loading } from './ui';
 export default function Planner() {
-  const { resources, loading, user, signIn, toast, workspace } = useFlow(),
-    navigate = useNavigate(),
-    [params] = useSearchParams();
-  const [resourceId, setResource] = useState(Number(params.get('resource')) || 0),
-    [serviceId, setService] = useState(Number(params.get('service'))||0),
-    [date, setDate] = useState(params.get('date')||tomorrow(workspace.timezone)),
-    [time, setTime] = useState(params.get('time')||'18:00'),
-    [flexDays, setFlex] = useState(1),
-    [alternatives, setAlternatives] = useState(true);
+  const { resources, loading, user, signIn, toast, workspace } = useFlow();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+
+  // Search preferences are stored in state and updated by the form below.
+  const [resourceId, setResource] = useState(Number(params.get('resource')) || 0);
+  const [serviceId, setService] = useState(Number(params.get('service')) || 0);
+  const [date, setDate] = useState(params.get('date') || tomorrow(workspace.timezone));
+  const [time, setTime] = useState(params.get('time') || '18:00');
+  const [flexDays, setFlex] = useState(1);
+  const [alternatives, setAlternatives] = useState(true);
+
   const [results, setResults] = useState<{
-      candidates: Candidate[];
-      verifiedAt: string;
-      totalCandidates: number;
-    } | null>(null),
-    [busy, setBusy] = useState(false),
-    [holding, setHolding] = useState(''),
-    [error, setError] = useState(''),
-    [text, setText] = useState(''),
-    [assistantMessage, setAssistantMessage] = useState(''),
-    [searchVersion, setSearchVersion] = useState(0);
-  const resource = resources.find((r) => r.id === resourceId),
-    service = resource?.services.find((s) => s.id === serviceId);
+    candidates: Candidate[];
+    verifiedAt: string;
+    totalCandidates: number;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [holding, setHolding] = useState('');
+  const [error, setError] = useState('');
+  const [text, setText] = useState('');
+  const [assistantMessage, setAssistantMessage] = useState('');
+  const [searchVersion, setSearchVersion] = useState(0);
+
+  const resource = resources.find((r) => r.id === resourceId);
+  const service = resource?.services.find((s) => s.id === serviceId);
+
   useEffect(() => {
     if (resources.length && !resources.some((r) => r.id === resourceId))
       setResource(resources[0].id);
   }, [resources]);
   useEffect(() => {
-    setService(current=>resource?.services.some(s=>s.id===current)?current:resource?.services[0]?.id??0);
+    setService((current) =>
+      resource?.services.some((s) => s.id === current) ? current : (resource?.services[0]?.id ?? 0),
+    );
   }, [resourceId, resources]);
   useEffect(() => {
     setResults(null);
     setError('');
   }, [resourceId, serviceId, date, time, flexDays, alternatives]);
+  // POST /api/flow/recommendations returns options; it does not reserve them.
   async function search() {
     if (!resource || !service) return;
     setBusy(true);
@@ -59,18 +67,19 @@ export default function Planner() {
       setBusy(false);
     }
   }
-  async function createHold(c: Candidate) {
+  // POST /api/flow/holds rechecks availability and creates a five-minute hold.
+  async function createHold(candidate: Candidate) {
     if (!user) {
       signIn();
       return;
     }
-    setHolding(c.start + c.resourceId);
+    setHolding(candidate.start + candidate.resourceId);
     setError('');
     try {
       await request<Booking>('/holds', 'POST', {
-        resourceId: c.resourceId,
-        serviceId: c.serviceId,
-        start: c.start,
+        resourceId: candidate.resourceId,
+        serviceId: candidate.serviceId,
+        start: candidate.start,
       });
       toast('Your time is held for five minutes. Confirm it in My bookings.');
       navigate('/bookings');
@@ -138,7 +147,7 @@ export default function Planner() {
                   <input
                     type="date"
                     required
-                    min={dateInZone(new Date(), resource?.timezone??workspace.timezone)}
+                    min={dateInZone(new Date(), resource?.timezone ?? workspace.timezone)}
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                   />
@@ -184,7 +193,14 @@ export default function Planner() {
               </p>
             </form>
           </section>
-          <section className="bf-assistant"><h3>Prefer a conversation?</h3><p>Describe your plan to the assistant, then review the suggested filters.</p><button className="bf-button secondary full" onClick={()=>navigate('/chat')}>Open chat assistant<Icon name="spark" size={16}/></button></section>
+          <section className="bf-assistant">
+            <h3>Prefer a conversation?</h3>
+            <p>Describe your plan to the assistant, then review the suggested filters.</p>
+            <button className="bf-button secondary full" onClick={() => navigate('/chat')}>
+              Open chat assistant
+              <Icon name="spark" size={16} />
+            </button>
+          </section>
         </aside>
         <section className="bf-results">
           <div className="bf-panel-title">

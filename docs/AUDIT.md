@@ -1,41 +1,52 @@
-# BookFlow audit — 24 September 2026
+# BookFlow audit — 25 September 2026
 
-Status: working local application; not yet verified as a complete or production-ready delivery. This audit changes documentation only.
+BookFlow is a working local MVP. The active API is `/api/flow`; older BookIt
+payment and admin routes are not mounted.
 
-## Verified checks
+## Current code checks
 
-- `npm run typecheck`: passed.
-- `npm run build`: passed for server and client.
-- `npm test`: all 14 integration tests passed in a disposable PostgreSQL database. Includes 20 simultaneous hold requests (one success, 19 conflicts), buffered exclusion constraints, confirmation/cancellation/rescheduling, expiry, waitlist offers, permissions, custom resources, ranking and DST slot generation.
-- Live `GET http://localhost:4170/api/health`: `{ "ok": true, "db": "up", "product": "BookFlow" }`.
-- Live frontend at `http://localhost:5175`: HTTP 200. This is an HTTP check, not visual or end-to-end browser verification.
-- PostgreSQL 16.15 is running in Docker container `bookflow-postgres`, exposed locally at port 54329. Database `bookflow` contains 6 resources, 12 services and 8 bookings at audit time.
-- Applied migrations: `000_baseline`, `001_bookflow.sql`, `002_workspace.sql`.
+- `npm run typecheck`: passed after the latest code changes.
+- `npm run build`: passed after the latest code changes.
+- `npm test`: all 25 integration tests passed in a disposable PostgreSQL
+  database, including 20-way hold contention, session revocation, email
+  verification, and password recovery.
+- The app now has a production Dockerfile, same-origin frontend serving,
+  production JWT-secret validation, compiled SQL migration assets, streaming
+  CSV export, complete service editing, and owner settings controls.
+- Customer and owner password changes, password recovery, and sign-out increment
+  a stored session version. Every protected request compares it with the token.
+- New public signups require email verification. Account links are one-time and
+  time-limited. SMTP delivery is implemented but has not been verified with a
+  live provider.
+- Backup and restore commands passed a local drill using Docker's PostgreSQL
+  clients. A custom archive restored into an empty temporary database with six
+  migrations, nine bookings, and two customers. Repeating the restore against
+  populated tables was rejected. The temporary database was removed.
+- The existing local database was backed up before migrations 004 and 005 were
+  applied. A post-migration backup was also saved in the ignored `backups/`
+  directory. The built app's `/api/health` returned database up.
+- Migrations 006 and 007 add publisher seat pools, exact adjacent-seat allocation,
+  and safe withdrawal before any group confirms.
+  The local database was backed up before applying them. The new integration
+  tests cover three-group allocation, direct-booking conflicts, guest chat,
+  and session preservation after a wrong current password.
+- The local website was checked in Chrome: seat-pool navigation rendered and
+  the chatbot responded to booking questions. A live Gemini request and
+  follow-up produced a validated search suggestion after correcting the JSON
+  output enum. Tests use a mock key and never call the live Gemini API.
 
-## Confirmed issues and incomplete areas
+## Still open for a public deployment
 
-1. **Business timezone is not consistently honored in the UI.** `client/src/flow/Operations.tsx` labels time off as IST and converts entered dates using a fixed `+05:30` offset. Changing business timezone therefore does not change how this form interprets input. Planner, waitlist and reschedule default dates also use helpers defaulting to Asia/Kolkata. Some booking details pass the correct timezone, but cancellation dialogs and operations displays do not. The assistant route calls `parseRequest(text)` without the workspace timezone.
-2. **Production API routing is not configured.** The client requests relative `/api/flow` URLs. Vite's proxy handles these only in development. A deployment needs a same-origin reverse proxy/rewrite or a configurable backend base URL and corresponding CORS settings. The Express app does not serve the frontend or its SPA route fallback.
-3. **Production configuration does not fail closed on a missing JWT secret.** `server/src/config.ts` falls back to a known development secret. Require a strong deployment secret and reject missing/insecure production configuration.
-4. **Compiled migration artifacts are incomplete.** The server build emits `dist/db/migrate.js` but does not copy `schema.sql` or the migrations directory it reads. Source migrations through `npm run db:migrate` work; a deployment containing only compiled output cannot use the compiled migrator as-is. Its connection to the `postgres` maintenance database also needs checking against the chosen managed provider.
-5. **Docker runtime differs from Compose configuration.** The running container stores data in an anonymous Docker volume. `compose.yaml` defines a different, named `bookflow_data` volume, and `docker compose ps` lists no container for this project. Preserve the current data before adopting Compose; the file alone does not reproduce the existing runtime/data attachment.
-6. **Settings management is partial.** The active API/UI supports business settings, adding locations, adding a resource with its first service, weekly hours, activation and adding time off. It has no active endpoints for editing existing service duration/price/buffers, adding subsequent services, or deleting time-off entries. Resource detail and location editing are also not exposed.
-7. **README capabilities do not match the active application.** Only `/api/flow` is mounted by `server/src/app.ts`; legacy BookIt payment/customer/admin routers are not mounted. Payments, refunds, coupons, reviews, loyalty and recurring bookings described in the README are not available through the active BookFlow app. Their absence is a scope/documentation discrepancy, not proof that every legacy feature is required.
-8. **Notifications are local/in-app.** The active maintenance task writes HTML files and the UI reads database notifications. It does not dispatch real email/SMS. The optional assistant is disabled or a deterministic mock parser, not an LLM integration.
-9. **Exports are limited.** The export endpoint reuses operations data capped at 200 bookings, so it is not a complete export for larger datasets.
-10. **Operational preparation is unfinished.** No checked-in frontend/backend Dockerfile, cloud deployment manifest, or backup/restore automation was found. A Dockerfile is optional for managed Node hosting. The maintenance timer needs a running backend for timely expiry processing and waitlist offers.
+1. Live account email and booking notification delivery need SMTP credentials
+   and end-to-end verification. SMS delivery is not implemented.
+2. A cloud deployment, managed database, backups in private external storage,
+   and monitoring have not been verified. The restore drill was local only.
+3. Complete browser journeys, mobile layout, accessibility, and sustained-load
+   checks remain unverified. The seat-pool and chatbot pages received a visual
+   check in Chrome.
+4. Live Gemini worked locally with the supplied key, but provider quotas,
+   long-term reliability, and production behavior remain unverified. Prices
+   are informational; payment collection is outside the active flow.
+5. No original SRS is present, so full SRS completion cannot be certified.
 
-## Verification limits
-
-- Browser inspection could not run: the in-app browser was unavailable and browser discovery returned no connected browsers. Responsive layout, accessibility and complete click-through journeys remain unverified.
-- Passing integration tests does not establish coverage of every route or UI. The existing DST test uses fixed dates and will need maintenance as those dates pass.
-- No original SRS is present in the available project text files; full requirement completion cannot be certified.
-- No live cloud deployment was verified. Source code and local services alone cannot establish whether an external deployment exists.
-
-## Recommended completion order
-
-1. Correct timezone handling and production secret validation.
-2. Decide the intended settings/service-management scope and implement missing required controls.
-3. Prepare production routing, migrations, database provisioning and backup/restore; reconcile Docker storage without losing current records.
-4. Complete browser/mobile journeys and focused regression tests for the fixes.
-5. Update README, architecture and setup guides, then verify a staging deployment against the agreed requirements.
+See [deployment steps](DEPLOYMENT.md) and the [completion checklist](BUILD_STEPS.md).

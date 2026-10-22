@@ -1,5 +1,7 @@
 import { pool } from '../db/pool.js';
-import { transaction, lockResource, audit, fail, promote } from './booking.js';
+import { lockResource, audit, promote } from './booking.js';
+import { transaction } from '../db/transaction.js';
+import { fail } from '../middleware/errors.js';
 export async function operations(organizationId: number) {
   const { rows: bookings } = await pool.query(
     `SELECT b.id,b.code,b.starts_at,b.ends_at,b.status,b.version,p.id AS resource_id,p.name AS resource_name,s.name AS service_name,c.name AS customer_name FROM bookings b JOIN providers p ON p.id=b.provider_id JOIN services s ON s.id=b.service_id JOIN customers c ON c.id=b.customer_id WHERE p.organization_id=$1 ORDER BY b.starts_at DESC LIMIT 200`,
@@ -86,9 +88,13 @@ export async function blockTime(
     await lockResource(db, id);
     const {
       rows: [r],
-    } = await db.query('SELECT p.id,o.timezone FROM providers p JOIN organizations o ON o.id=p.organization_id WHERE p.id=$1 AND p.organization_id=$2', [id, org]);
+    } = await db.query(
+      'SELECT p.id,o.timezone FROM providers p JOIN organizations o ON o.id=p.organization_id WHERE p.id=$1 AND p.organization_id=$2',
+      [id, org],
+    );
     if (!r) return fail(404, 'Resource not found');
-    if(timezone && r.timezone!==timezone)return fail(409,'Business timezone changed. Refresh and try again.');
+    if (timezone && r.timezone !== timezone)
+      return fail(409, 'Business timezone changed. Refresh and try again.');
     const conflict = await db.query(
       `SELECT 1 FROM bookings WHERE provider_id=$1 AND status IN('held','confirmed') AND (status<>'held' OR expires_at>now()) AND blocked_start<$3 AND blocked_end>$2`,
       [id, start, end],
@@ -98,6 +104,15 @@ export async function blockTime(
         409,
         'Existing reservations overlap this time off. Resolve those reservations first.',
       );
+    if (
+      (
+        await db.query(
+          "SELECT 1 FROM seat_pools WHERE resource_id=$1 AND status='open' AND blocked_start<$3 AND blocked_end>$2 LIMIT 1",
+          [id, start, end],
+        )
+      ).rowCount
+    )
+      return fail(409, 'A published seat pool overlaps this time off.');
     return (
       await db.query(
         'INSERT INTO time_off(provider_id,starts_at,ends_at,reason) VALUES($1,$2,$3,$4) RETURNING *',

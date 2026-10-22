@@ -3,27 +3,12 @@ import { randomBytes } from 'node:crypto';
 import { pool } from '../db/pool.js';
 import { computeSlots } from '../services/slots.js';
 import { localDate, localTime, minuteOfDay } from './time.js';
-export const fail = (status: number, message: string): never => {
-  throw Object.assign(new Error(message), { status });
-};
-export async function transaction<T>(work: (db: pg.PoolClient) => Promise<T>): Promise<T> {
-  const db = await pool.connect();
-  try {
-    await db.query('BEGIN');
-    const result = await work(db);
-    await db.query('COMMIT');
-    return result;
-  } catch (error: any) {
-    await db.query('ROLLBACK');
-    if (error.code === '23P01')
-      fail(409, 'SLOT_CONFLICT: That slot was just taken. Choose another option.');
-    if (error.code === '23505')
-      fail(409, 'This request already exists. Refresh to see its status.');
-    throw error;
-  } finally {
-    db.release();
-  }
-}
+import { transaction } from '../db/transaction.js';
+import { fail } from '../middleware/errors.js';
+// Preserve existing imports while shared helpers live in their own modules.
+export { transaction } from '../db/transaction.js';
+export { fail } from '../middleware/errors.js';
+
 export async function lockResource(db: pg.PoolClient, id: number) {
   await db.query(
     'SELECT o.id FROM organizations o JOIN providers p ON p.organization_id=o.id WHERE p.id=$1 FOR SHARE OF o',
@@ -89,29 +74,37 @@ export async function insertHold(
   customerId: number,
   actor = 'customer',
 ) {
-  const {
-    rows: [resource],
-  } = await db.query(
+  const resourceResult = await db.query(
     `SELECT o.timezone FROM providers p JOIN organizations o ON o.id=p.organization_id WHERE p.id=$1`,
     [resourceId],
   );
+  const resource = resourceResult.rows[0];
   if (!resource) return fail(404, 'Resource not found');
-  const { slots, service } = await computeSlots(
+  const availability = await computeSlots(
     db,
     resourceId,
     serviceId,
     localDate(start, resource.timezone),
   );
+  const slots = availability.slots;
+  const service = availability.service;
   const slot = slots.find((s) => Date.parse(s.start) === Date.parse(start));
   if (!slot)
     return fail(409, 'SLOT_CONFLICT: That time is no longer available. Refresh your options.');
   const code = 'BF-' + randomBytes(5).toString('hex').toUpperCase();
-  const {
-    rows: [booking],
-  } = await db.query(
-    `INSERT INTO bookings(code,provider_id,service_id,customer_id,starts_at,ends_at,status,expires_at,price_cents) VALUES($1,$2,$3,$4,$5,$6,'held',clock_timestamp()+interval '5 minutes',$7) RETURNING *`,
+  const bookingResult = await db.query(
+    `INSERT INTO bookings (
+       code, provider_id, service_id, customer_id,
+       starts_at, ends_at, status, expires_at, price_cents
+     )
+     VALUES (
+       $1, $2, $3, $4, $5, $6,
+       'held', clock_timestamp() + interval '5 minutes', $7
+     )
+     RETURNING *`,
     [code, resourceId, serviceId, customerId, slot.start, slot.end, service.price_cents],
   );
+  const booking = bookingResult.rows[0];
   await audit(
     db,
     booking.id,

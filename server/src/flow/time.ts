@@ -30,16 +30,30 @@ export function addDays(date: string, days: number) {
 }
 
 /** Reject nonexistent/ambiguous local wall times; callers must choose an explicit offset for a repeated hour. */
-export function wallTimeToInstant(value:string, timezone:string) {
- const [date,time]=value.split('T');dateSchema.parse(date);timeSchema.parse(time);
- const target=Date.parse(value+':00Z');
- const offsets=new Set<number>();
- for(let hour=-36;hour<=36;hour+=6){
-  const instant=new Date(target+hour*3600000);
-  const rendered=localDate(instant,timezone)+'T'+localTime(instant,timezone)+':00Z';
-  offsets.add(Date.parse(rendered)-instant.getTime());
- }
- const matches=[...offsets].map(offset=>new Date(target-offset)).filter(instant=>localDate(instant,timezone)===date&&localTime(instant,timezone)===time);
- if(matches.length!==1)throw Object.assign(new Error(matches.length?'This local time occurs twice because of daylight saving. Choose a time outside the repeated hour.':'This local time does not exist because of daylight saving. Choose another time.'),{status:400});
- return matches[0].toISOString();
+export function wallTimeToInstant(value: string, timezone: string) {
+  const [date, time] = value.split('T');
+  dateSchema.parse(date);
+  timeSchema.parse(time);
+  const target = Date.parse(value + ':00Z');
+  const offsets = new Set<number>();
+  for (let hour = -36; hour <= 36; hour += 6) {
+    const instant = new Date(target + hour * 3600000);
+    const rendered = localDate(instant, timezone) + 'T' + localTime(instant, timezone) + ':00Z';
+    offsets.add(Date.parse(rendered) - instant.getTime());
+  }
+  const matches = [...offsets]
+    .map((offset) => new Date(target - offset))
+    .filter(
+      (instant) => localDate(instant, timezone) === date && localTime(instant, timezone) === time,
+    );
+  if (matches.length !== 1)
+    throw Object.assign(
+      new Error(
+        matches.length
+          ? 'This local time occurs twice because of daylight saving. Choose a time outside the repeated hour.'
+          : 'This local time does not exist because of daylight saving. Choose another time.',
+      ),
+      { status: 400 },
+    );
+  return matches[0].toISOString();
 }

@@ -8,6 +8,8 @@
     "client"
   ],
   "scripts": {
+    "format": "prettier --write client/src server/src server/test scripts client/vite.config.ts package.json client/package.json server/package.json client/tsconfig.json server/tsconfig.json .prettierrc.json",
+    "format:check": "prettier --check client/src server/src server/test scripts client/vite.config.ts package.json client/package.json server/package.json client/tsconfig.json server/tsconfig.json .prettierrc.json",
     "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build -w server && npm run build -w client",
     "db:migrate": "npm run db:migrate -w server",

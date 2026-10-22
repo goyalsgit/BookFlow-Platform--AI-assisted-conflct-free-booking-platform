@@ -4,6 +4,7 @@ import { Icon } from './ui';
 const links = [
   ['/', 'grid', 'Overview'],
   ['/planner', 'spark', 'Find a time'],
+  ['/seat-pools', 'grid', 'Seat pools'],
   ['/chat', 'spark', 'Chat assistant'],
   ['/bookings', 'calendar', 'My bookings'],
   ['/waitlist', 'list', 'Waitlist'],
@@ -13,10 +14,17 @@ export default function Shell() {
   const { user, admin, signIn, logout, workspace } = useFlow(),
     location = useLocation();
   const navigate = useNavigate();
-  const signOut = () => { logout(); navigate('/'); };
+  const signOut = async () => {
+    await logout();
+    navigate('/');
+  };
   const title =
     links.find((l) => l[0] === location.pathname)?.[2] ??
-    (location.pathname === '/settings' ? 'Business setup' : location.pathname === '/profile' ? 'My profile' : 'Operations');
+    (location.pathname === '/settings'
+      ? 'Business setup'
+      : location.pathname === '/profile'
+        ? 'My profile'
+        : 'Operations');
   return (
     <div className="bf">
       <aside className="bf-sidebar">
@@ -27,82 +35,147 @@ export default function Shell() {
           bookflow<span className="bf-brand-dot">.</span>
         </Link>
         <div className="bf-workspace">
-          <span className="bf-workspace-avatar">{workspace.name[0]}</span>
+          <span className="bf-workspace-avatar">{admin ? workspace.name[0] : 'B'}</span>
           <div>
-            <strong>{workspace.name}</strong>
-            <small>Resource workspace</small>
+            <strong>{admin ? workspace.name : 'BookFlow'}</strong>
+            <small>{admin ? 'Business workspace' : 'Find and book resources'}</small>
           </div>
           <span className="bf-workspace-chevron">⌄</span>
         </div>
-        <div className="bf-nav-label">WORKSPACE</div>
+        <div className="bf-nav-label">{admin ? 'WORKSPACE' : 'BOOKING'}</div>
         <nav>
-          {links.map(([path, icon, label]) => (
-            <NavLink key={path} to={path} end={path === '/'}>
-              <Icon name={icon} />
-              <span>{label}</span>
-              {path === '/planner' && <span className="bf-nav-new">SMART</span>}
+          {links
+            .filter(([path]) => {
+              if (path === '/bookings' || path === '/waitlist') return !!user;
+              if (path === '/inbox') return !!user || !!admin;
+              return true;
+            })
+            .map(([path, icon, label]) => (
+              <NavLink key={path} to={path} end={path === '/'}>
+                <Icon name={icon} />
+                <span>{label}</span>
+                {path === '/planner' && <span className="bf-nav-new">SMART</span>}
+              </NavLink>
+            ))}
+        </nav>
+        {user && (
+          <nav>
+            <NavLink to="/profile">
+              <Icon name="grid" />
+              <span>My profile</span>
             </NavLink>
-          ))}
-        </nav>
-        {user && <nav><NavLink to="/profile"><Icon name="grid" /><span>My profile</span></NavLink></nav>}
-        <div className="bf-nav-label bf-management">MANAGEMENT</div>
-        <nav>
-          <NavLink to="/operations">
-            <Icon name="chart" />
-            <span>Operations</span>
-          </NavLink>
-        </nav>
-        <nav>
-          <NavLink to="/settings">
-            <Icon name="grid" />
-            <span>Business setup</span>
-          </NavLink>
-        </nav>
+          </nav>
+        )}
+        {admin && (
+          <>
+            <div className="bf-nav-label bf-management">MANAGEMENT</div>
+            <nav>
+              <NavLink to="/operations">
+                <Icon name="chart" />
+                <span>Operations</span>
+              </NavLink>
+            </nav>
+            <nav>
+              <NavLink to="/settings">
+                <Icon name="grid" />
+                <span>Business setup</span>
+              </NavLink>
+            </nav>
+          </>
+        )}
         <div className="bf-sidebar-bottom">
+          {!user && !admin && (
+            <button className="bf-text-button" onClick={() => signIn(true)}>
+              Business owner sign in
+            </button>
+          )}
           <div className="bf-sidebar-note">
             <span>
               <Icon name="shield" size={19} />
               Your time, protected.
             </span>
             <p>
-              One resource. One reservation.
+              Book your way.
               <br />
               Room for everything that matters.
             </p>
           </div>
-          {user ? <Link className="bf-profile" to="/profile"><span className="bf-avatar">{user.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><span><strong>{user.name}</strong><small>View customer profile</small></span><Icon name="arrow" size={18} /></Link> : <button className="bf-profile" onClick={() => (admin ? signOut() : signIn())}>
-            <span className="bf-avatar">
-              {admin
-                ? admin.name
-                    .split(' ')
-                    .map((p) => p[0])
-                    .join('')
-                    .slice(0, 2)
-                : 'G'}
-            </span>
-            <span>
-              <strong>{admin?.name ?? 'Guest workspace'}</strong>
-              <small>{admin ? 'Sign out' : 'Sign in to book'}</small>
-            </span>
-            <Icon name={admin ? 'logout' : 'arrow'} size={18} />
-          </button>}
+          {user ? (
+            <Link className="bf-profile" to="/profile">
+              <span className="bf-avatar">
+                {user.name
+                  .split(' ')
+                  .map((part) => part[0])
+                  .join('')
+                  .slice(0, 2)}
+              </span>
+              <span>
+                <strong>{user.name}</strong>
+                <small>Customer profile</small>
+              </span>
+              <Icon name="arrow" size={18} />
+            </Link>
+          ) : admin ? (
+            <Link className="bf-profile" to="/settings">
+              <span className="bf-avatar">
+                {admin.name
+                  .split(' ')
+                  .map((p) => p[0])
+                  .join('')
+                  .slice(0, 2)}
+              </span>
+              <span>
+                <strong>{admin.name}</strong>
+                <small>Business owner · Manage business</small>
+              </span>
+              <Icon name="arrow" size={18} />
+            </Link>
+          ) : (
+            <button className="bf-profile" onClick={() => signIn()}>
+              <span className="bf-avatar">G</span>
+              <span>
+                <strong>Guest workspace</strong>
+                <small>Sign in to book</small>
+              </span>
+              <Icon name="arrow" size={18} />
+            </button>
+          )}
         </div>
       </aside>
       <div className="bf-main">
         <header className="bf-topbar">
           <div className="bf-breadcrumb">
-            Workspace <span>/</span> <strong>{title}</strong>
+            {admin ? 'Workspace' : 'Booking'} <span>/</span> <strong>{title}</strong>
           </div>
           <div className="bf-top-actions">
             <span className="bf-timezone">
               <i />
               {workspace.timezone}
             </span>
-            <Link className="bf-icon-button" to="/inbox" aria-label="Open notifications">
-              <Icon name="bell" />
-            </Link>
-            {user ? <Link className="bf-avatar small" to="/profile" aria-label="My profile">{user.name[0]}</Link> : admin ? <Link className="bf-avatar small" to="/settings" aria-label="Business setup">{admin.name[0]}</Link> : <button className="bf-avatar small" onClick={() => signIn()} aria-label="Sign in">G</button>}
-            {(user || admin) && <button className="bf-top-signout" onClick={signOut}><Icon name="logout" size={16} /><span>Sign out</span></button>}
+            {(user || admin) && (
+              <Link className="bf-icon-button" to="/inbox" aria-label="Open notifications">
+                <Icon name="bell" />
+              </Link>
+            )}
+            {user ? (
+              <Link className="bf-avatar small" to="/profile" aria-label="My profile">
+                {user.name[0]}
+              </Link>
+            ) : admin ? (
+              <Link className="bf-avatar small" to="/settings" aria-label="Business setup">
+                {admin.name[0]}
+              </Link>
+            ) : (
+              <button className="bf-avatar small" onClick={() => signIn()} aria-label="Sign in">
+                G
+              </button>
+            )}
+            {(user || admin) && (
+              <button className="bf-top-signout" onClick={signOut}>
+                <Icon name="logout" size={16} />
+                <span>Sign out</span>
+              </button>
+            )}
           </div>
         </header>
         <main className="bf-content">
@@ -110,11 +183,13 @@ export default function Shell() {
         </main>
         <footer className="bf-footer">
           <span>BookFlow · Shared resources, thoughtfully scheduled.</span>
-          <div className="bf-mobile-admin">
-            <Link to="/operations">Operations</Link>
-            <Link to="/settings">Business setup</Link>
-          </div>
-          <span>{workspace.name} · Resource workspace</span>
+          {admin && (
+            <div className="bf-mobile-admin">
+              <Link to="/operations">Operations</Link>
+              <Link to="/settings">Business setup</Link>
+            </div>
+          )}
+          <span>{admin ? `${workspace.name} · Business workspace` : 'Customer booking'}</span>
         </footer>
       </div>
     </div>

@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useFlow } from './context';
-import { request, typeLabel,dayLabel,timeLabel } from './api';
+import { request, typeLabel, dayLabel, timeLabel } from './api';
 import { Icon, Empty, ErrorMessage, Loading } from './ui';
 import { mapsDirectionsUrl } from './maps';
 import PlaceInput from './PlaceInput';
+import PasswordForm from './PasswordForm';
 type Window = { weekday: number; start: string; end: string };
 type SettingsData = {
-  organization: { name: string; timezone: string; cancellation_cutoff_min: number };
+  organization: {
+    name: string;
+    business_type: string;
+    timezone: string;
+    cancellation_cutoff_min: number;
+  };
   locations: { id: number; name: string; address: string }[];
   resources: {
     id: number;
@@ -14,14 +20,22 @@ type SettingsData = {
     business_type: string;
     active: boolean;
     location_name: string;
-    location_id:number;
-    bio:string;
-    services:Session[];
-    timeOff:{id:number;starts_at:string;ends_at:string;reason:string}[];
+    location_id: number;
+    bio: string;
+    services: Session[];
+    timeOff: { id: number; starts_at: string; ends_at: string; reason: string }[];
     schedule: Window[];
   }[];
 };
-type Session={id:number;name:string;duration_min:number;buffer_before_min:number;buffer_min:number;price_cents:number;active:boolean};
+type Session = {
+  id: number;
+  name: string;
+  duration_min: number;
+  buffer_before_min: number;
+  buffer_min: number;
+  price_cents: number;
+  active: boolean;
+};
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function Settings() {
   const { admin, signIn, toast, refresh } = useFlow();
@@ -29,6 +43,7 @@ export default function Settings() {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [name, setName] = useState(''),
+    [businessType, setBusinessType] = useState(''),
     [timezone, setTimezone] = useState('Asia/Kolkata'),
     [cutoff, setCutoff] = useState(60),
     [tab, setTab] = useState('business'),
@@ -41,6 +56,7 @@ export default function Settings() {
       .then((d) => {
         setData(d);
         setName(d.organization.name);
+        setBusinessType(d.organization.business_type);
         setTimezone(d.organization.timezone);
         setCutoff(d.organization.cancellation_cutoff_min);
       })
@@ -67,7 +83,7 @@ export default function Settings() {
       <Empty title="Built around your business." icon="grid">
         <p>Customize your workspace, create any resource type and set your own working hours.</p>
         <button className="bf-button primary" onClick={() => signIn(true)}>
-          Administrator sign in
+          Business owner sign in
         </button>
       </Empty>
     );
@@ -117,6 +133,7 @@ export default function Settings() {
                   () =>
                     request('/admin/settings', 'PUT', {
                       name,
+                      businessType,
                       timezone,
                       cancellationCutoffMinutes: cutoff,
                     }),
@@ -133,6 +150,26 @@ export default function Settings() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
+              </label>
+              <label>
+                Business type
+                <input
+                  required
+                  minLength={2}
+                  maxLength={80}
+                  value={businessType}
+                  onChange={(e) => setBusinessType(e.target.value)}
+                  list="business-types-settings"
+                  placeholder="e.g. Salon, clinic, sports turf"
+                />
+                <datalist id="business-types-settings">
+                  <option value="Salon" />
+                  <option value="Clinic" />
+                  <option value="Sports turf" />
+                  <option value="Studio" />
+                  <option value="Education" />
+                  <option value="Other" />
+                </datalist>
               </label>
               <label>
                 Business timezone
@@ -186,9 +223,21 @@ export default function Settings() {
                   <Icon name="pin" size={18} />
                   <div>
                     <strong>{l.name}</strong>
-                    <small>{l.address || 'No address added — edit this location to enable customer directions'}</small>
-                    {mapsDirectionsUrl(l.name, l.address) && <a className="bf-directions-link" href={mapsDirectionsUrl(l.name, l.address)!} target="_blank" rel="noopener noreferrer">Preview directions</a>}
-                    <LocationEditor location={l} busy={busy} save={save}/>
+                    <small>
+                      {l.address ||
+                        'No address added — edit this location to enable customer directions'}
+                    </small>
+                    {mapsDirectionsUrl(l.name, l.address) && (
+                      <a
+                        className="bf-directions-link"
+                        href={mapsDirectionsUrl(l.name, l.address)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Preview directions
+                      </a>
+                    )}
+                    <LocationEditor location={l} busy={busy} save={save} />
                   </div>
                 </div>
               ))}
@@ -197,7 +246,11 @@ export default function Settings() {
               onSubmit={(e) => {
                 e.preventDefault();
                 void save(
-                  () => request('/admin/locations', 'POST', { name: locationName, address: locationAddress }),
+                  () =>
+                    request('/admin/locations', 'POST', {
+                      name: locationName,
+                      address: locationAddress,
+                    }),
                   'Location created.',
                 );
                 setLocationName('');
@@ -214,13 +267,18 @@ export default function Settings() {
                   placeholder="e.g. Downtown studio"
                 />
               </label>
-              <PlaceInput label="Street address for directions" value={locationAddress} onChange={setLocationAddress} />
+              <PlaceInput
+                label="Street address for directions"
+                value={locationAddress}
+                onChange={setLocationAddress}
+              />
               <button className="bf-button secondary" disabled={busy}>
                 <Icon name="plus" size={16} />
                 Add location
               </button>
             </form>
           </section>
+          <PasswordForm admin />
         </div>
       ) : tab === 'new' ? (
         <ResourceForm
@@ -239,8 +297,8 @@ export default function Settings() {
             <div>
               <h2>Bookable resources</h2>
               <p>
-                Each resource has exclusive capacity. Add separate resources for separate staff or
-                equipment.
+                Customers can choose an ordinary time, or you can publish an adjacent-seat pool for
+                a session from Seat pools.
               </p>
             </div>
             <button className="bf-button primary" onClick={() => setTab('new')}>
@@ -273,21 +331,62 @@ export default function Settings() {
                   onClick={() =>
                     void save(
                       () => request('/admin/resources/' + r.id, 'PATCH', { active: !r.active }),
-                      r.active ? 'Resource paused for new bookings.' : 'Resource activated.',
+                      r.active
+                        ? 'Resource paused for new direct bookings. Published seat pools remain available.'
+                        : 'Resource activated.',
                     )
                   }
                 >
                   {r.active ? 'Pause' : 'Activate'}
                 </button>
               </div>
-              <details className="bf-resource-editor"><summary>Edit details, services & time off</summary>
-                <ResourceDetails key={JSON.stringify([r.name,r.business_type,r.bio,r.location_id])} resource={r} locations={data.locations} busy={busy} save={save}/>
+              <details className="bf-resource-editor">
+                <summary>Edit details, services & time off</summary>
+                <ResourceDetails
+                  key={JSON.stringify([r.name, r.business_type, r.bio, r.location_id])}
+                  resource={r}
+                  locations={data.locations}
+                  busy={busy}
+                  save={save}
+                />
                 <h3>Bookable sessions</h3>
-                {r.services.map(session=><SessionEditor key={JSON.stringify(session)} resourceId={r.id} session={session} busy={busy} save={save}/>)}
-                <details><summary>Add a session</summary><SessionEditor resourceId={r.id} busy={busy} save={save}/></details>
+                {r.services.map((session) => (
+                  <SessionEditor
+                    key={JSON.stringify(session)}
+                    resourceId={r.id}
+                    session={session}
+                    busy={busy}
+                    save={save}
+                  />
+                ))}
+                <details>
+                  <summary>Add a session</summary>
+                  <SessionEditor resourceId={r.id} busy={busy} save={save} />
+                </details>
                 <h3>Upcoming time off</h3>
-                {!r.timeOff.length&&<p>No upcoming time off. Add a block in Operations.</p>}
-                {r.timeOff.map(t=><div className="bf-timeoff-row" key={t.id}><span>{dayLabel(t.starts_at,data.organization.timezone)} {timeLabel(t.starts_at,data.organization.timezone)} – {dayLabel(t.ends_at,data.organization.timezone)} {timeLabel(t.ends_at,data.organization.timezone)} · {t.reason}</span><button className="bf-button secondary" disabled={busy} onClick={()=>void save(()=>request(`/admin/resources/${r.id}/time-off/${t.id}`,'DELETE'),'Time off removed.')}>Remove block</button></div>)}
+                {!r.timeOff.length && <p>No upcoming time off. Add a block in Operations.</p>}
+                {r.timeOff.map((t) => (
+                  <div className="bf-timeoff-row" key={t.id}>
+                    <span>
+                      {dayLabel(t.starts_at, data.organization.timezone)}{' '}
+                      {timeLabel(t.starts_at, data.organization.timezone)} –{' '}
+                      {dayLabel(t.ends_at, data.organization.timezone)}{' '}
+                      {timeLabel(t.ends_at, data.organization.timezone)} · {t.reason}
+                    </span>
+                    <button
+                      className="bf-button secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        void save(
+                          () => request(`/admin/resources/${r.id}/time-off/${t.id}`, 'DELETE'),
+                          'Time off removed.',
+                        )
+                      }
+                    >
+                      Remove block
+                    </button>
+                  </div>
+                ))}
               </details>
               {editing === r.id && (
                 <form
@@ -583,22 +682,237 @@ function ResourceForm({
   );
 }
 
-type Save=(fn:()=>Promise<unknown>,message:string)=>Promise<void>;
-function SessionEditor({resourceId,session,busy,save}:{resourceId:number;session?:Session;busy:boolean;save:Save}){
- const [name,setName]=useState(session?.name??''),[duration,setDuration]=useState(session?.duration_min??60),[before,setBefore]=useState(session?.buffer_before_min??0),[after,setAfter]=useState(session?.buffer_min??0),[price,setPrice]=useState((session?.price_cents??0)/100),[active,setActive]=useState(session?.active??true);
- return <form className="bf-session-editor" onSubmit={e=>{e.preventDefault();void save(()=>request(`/admin/resources/${resourceId}/services${session?'/'+session.id:''}`,session?'PUT':'POST',{name,durationMinutes:duration,bufferBefore:before,bufferAfter:after,priceCents:Math.round(price*100),active}),session?'Session updated.':'Session added.');}}>
- <label>Session name<input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label>
- <div className="bf-form-row"><label>Duration (minutes)<input required type="number" min={5} max={480} value={duration} onChange={e=>setDuration(Number(e.target.value))}/></label><label>Price (₹)<input required type="number" min={0} max={1000000} step="0.01" value={price} onChange={e=>setPrice(Number(e.target.value))}/></label></div>
- <div className="bf-form-row"><label>Preparation (minutes)<input required type="number" min={0} max={120} value={before} onChange={e=>setBefore(Number(e.target.value))}/></label><label>Cleanup (minutes)<input required type="number" min={0} max={120} value={after} onChange={e=>setAfter(Number(e.target.value))}/></label></div>
- <label className="bf-checkbox"><input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)}/>Available for new bookings</label>
- <p className="bf-input-hint">Existing reservations keep their price. Timing changes and pausing require resolving active reservations and waitlist requests first.</p>
- <button className="bf-button secondary" disabled={busy}>{session?'Save session':'Add session'}</button></form>;
+type Save = (fn: () => Promise<unknown>, message: string) => Promise<void>;
+function SessionEditor({
+  resourceId,
+  session,
+  busy,
+  save,
+}: {
+  resourceId: number;
+  session?: Session;
+  busy: boolean;
+  save: Save;
+}) {
+  const [name, setName] = useState(session?.name ?? ''),
+    [duration, setDuration] = useState(session?.duration_min ?? 60),
+    [before, setBefore] = useState(session?.buffer_before_min ?? 0),
+    [after, setAfter] = useState(session?.buffer_min ?? 0),
+    [price, setPrice] = useState((session?.price_cents ?? 0) / 100),
+    [active, setActive] = useState(session?.active ?? true);
+  return (
+    <form
+      className="bf-session-editor"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save(
+          () =>
+            request(
+              `/admin/resources/${resourceId}/services${session ? '/' + session.id : ''}`,
+              session ? 'PUT' : 'POST',
+              {
+                name,
+                durationMinutes: duration,
+                bufferBefore: before,
+                bufferAfter: after,
+                priceCents: Math.round(price * 100),
+                active,
+              },
+            ),
+          session ? 'Session updated.' : 'Session added.',
+        );
+      }}
+    >
+      <label>
+        Session name
+        <input
+          required
+          minLength={2}
+          maxLength={100}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <div className="bf-form-row">
+        <label>
+          Duration (minutes)
+          <input
+            required
+            type="number"
+            min={5}
+            max={480}
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value))}
+          />
+        </label>
+        <label>
+          Price (₹)
+          <input
+            required
+            type="number"
+            min={0}
+            max={1000000}
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(Number(e.target.value))}
+          />
+        </label>
+      </div>
+      <div className="bf-form-row">
+        <label>
+          Preparation (minutes)
+          <input
+            required
+            type="number"
+            min={0}
+            max={120}
+            value={before}
+            onChange={(e) => setBefore(Number(e.target.value))}
+          />
+        </label>
+        <label>
+          Cleanup (minutes)
+          <input
+            required
+            type="number"
+            min={0}
+            max={120}
+            value={after}
+            onChange={(e) => setAfter(Number(e.target.value))}
+          />
+        </label>
+      </div>
+      <label className="bf-checkbox">
+        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+        Available for new bookings
+      </label>
+      <p className="bf-input-hint">
+        Existing reservations keep their price. Timing changes and pausing require resolving active
+        reservations and waitlist requests first.
+      </p>
+      <button className="bf-button secondary" disabled={busy}>
+        {session ? 'Save session' : 'Add session'}
+      </button>
+    </form>
+  );
 }
-function ResourceDetails({resource,locations,busy,save}:{resource:SettingsData['resources'][number];locations:SettingsData['locations'];busy:boolean;save:Save}){
- const [name,setName]=useState(resource.name),[type,setType]=useState(resource.business_type),[description,setDescription]=useState(resource.bio),[locationId,setLocation]=useState(resource.location_id);
- return <form className="bf-session-editor" onSubmit={e=>{e.preventDefault();void save(()=>request('/admin/resources/'+resource.id,'PUT',{name,type,description,locationId}),'Resource details updated.');}}><h3>Resource details</h3><label>Name<input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label><label>Type<input required pattern="[a-z][a-z0-9_]*" minLength={2} maxLength={50} value={type} onChange={e=>setType(e.target.value)}/></label><label>Description<textarea maxLength={1000} value={description} onChange={e=>setDescription(e.target.value)}/></label><label>Location<select value={locationId} onChange={e=>setLocation(Number(e.target.value))}>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label><button className="bf-button secondary" disabled={busy}>Save resource</button></form>;
+function ResourceDetails({
+  resource,
+  locations,
+  busy,
+  save,
+}: {
+  resource: SettingsData['resources'][number];
+  locations: SettingsData['locations'];
+  busy: boolean;
+  save: Save;
+}) {
+  const [name, setName] = useState(resource.name),
+    [type, setType] = useState(resource.business_type),
+    [description, setDescription] = useState(resource.bio),
+    [locationId, setLocation] = useState(resource.location_id);
+  return (
+    <form
+      className="bf-session-editor"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save(
+          () =>
+            request('/admin/resources/' + resource.id, 'PUT', {
+              name,
+              type,
+              description,
+              locationId,
+            }),
+          'Resource details updated.',
+        );
+      }}
+    >
+      <h3>Resource details</h3>
+      <label>
+        Name
+        <input
+          required
+          minLength={2}
+          maxLength={100}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <label>
+        Type
+        <input
+          required
+          pattern="[a-z][a-z0-9_]*"
+          minLength={2}
+          maxLength={50}
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+        />
+      </label>
+      <label>
+        Description
+        <textarea
+          maxLength={1000}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </label>
+      <label>
+        Location
+        <select value={locationId} onChange={(e) => setLocation(Number(e.target.value))}>
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="bf-button secondary" disabled={busy}>
+        Save resource
+      </button>
+    </form>
+  );
 }
-function LocationEditor({location,busy,save}:{location:SettingsData['locations'][number];busy:boolean;save:Save}){
- const [name,setName]=useState(location.name),[address,setAddress]=useState(location.address);
- return <details><summary>Edit location</summary><form className="bf-session-editor" onSubmit={e=>{e.preventDefault();void save(()=>request('/admin/locations/'+location.id,'PUT',{name,address}),'Location updated.');}}><label>Name<input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label><PlaceInput label="Address" value={address} onChange={setAddress} /><button className="bf-button secondary" disabled={busy}>Save location</button></form></details>;
+function LocationEditor({
+  location,
+  busy,
+  save,
+}: {
+  location: SettingsData['locations'][number];
+  busy: boolean;
+  save: Save;
+}) {
+  const [name, setName] = useState(location.name),
+    [address, setAddress] = useState(location.address);
+  return (
+    <details>
+      <summary>Edit location</summary>
+      <form
+        className="bf-session-editor"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save(
+            () => request('/admin/locations/' + location.id, 'PUT', { name, address }),
+            'Location updated.',
+          );
+        }}
+      >
+        <label>
+          Name
+          <input
+            required
+            minLength={2}
+            maxLength={100}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <PlaceInput label="Address" value={address} onChange={setAddress} />
+        <button className="bf-button secondary" disabled={busy}>
+          Save location
+        </button>
+      </form>
+    </details>
+  );
 }

@@ -109,6 +109,7 @@ erDiagram
 | `bookings` | Holds and confirmed reservations | Exclusion constraint prevents active blocked-range overlap |
 | `booking_events`, `workspace_events` | Change history | Written with business/booking operations |
 | `allocation_requests`, `flow_notifications` | Waitlist and in-app notifications | Live waitlist request uniqueness and notification dedupe |
+| `seat_pools`, `seat_pool_requests`, `seat_pool_assignments` | Published group seating | One assignment per pool seat; direct-booking and pool ranges cannot overlap |
 | `request_limits` | Shared API rate limits | PostgreSQL atomic upsert across API instances |
 
 The baseline schema also creates legacy payment, coupon, loyalty, review, and favorite tables. They do not imply that those features are active in the BookFlow UI/API.
@@ -123,6 +124,6 @@ The baseline schema also creates legacy payment, coupon, loyalty, review, and fa
 
 ## Verified and still open
 
-`npm test` exercises signup/roles/profile, 20-way hold contention, direct SQL overlap rejection, buffers, expiry, confirmation, cancellation, rescheduling, waitlist, schedule edits, and timezone edge cases. A passing local suite proves these tested paths, not production behavior under sustained traffic.
+`npm test` runs 25 disposable-database tests covering signup/roles/profile, 20-way hold contention, direct SQL overlap rejection, buffers, expiry, confirmation, cancellation, rescheduling, waitlist, adjacent-seat allocation and withdrawal, schedule edits, timezone edge cases, password recovery, email verification, Gemini request validation, and session revocation. The local suite passes, but does not prove production behavior under sustained traffic.
 
-Sign out clears the browser session. JWTs are not revoked server-side before their expiry. Email verification, password recovery, deployment monitoring, backup/restore drills, and load testing remain open before calling the service production ready. Prices are informational in the active BookFlow app; do not claim payment processing on a resume.
+Sign out clears the browser session and increments the account's session version in PostgreSQL, revoking issued JWTs. Password changes and resets do the same. New public accounts require email verification through one-time links. Live SMTP delivery, deployment monitoring, backup/restore drills, and load testing remain open before calling the service production ready. Prices are informational in the active BookFlow app; do not claim payment processing on a resume.

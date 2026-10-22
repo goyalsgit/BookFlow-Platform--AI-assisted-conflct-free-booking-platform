@@ -204,7 +204,16 @@ export default function Overview() {
                     {Math.max(...r.services.map((s) => s.duration_min))} min
                   </span>
                 </div>
-                {mapsDirectionsUrl(r.location_name, r.location_address) && <a className="bf-directions-link" href={mapsDirectionsUrl(r.location_name, r.location_address)!} target="_blank" rel="noopener noreferrer"><Icon name="pin" size={14} /> Directions to {r.location_name}</a>}
+                {mapsDirectionsUrl(r.location_name, r.location_address) && (
+                  <a
+                    className="bf-directions-link"
+                    href={mapsDirectionsUrl(r.location_name, r.location_address)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Icon name="pin" size={14} /> Directions to {r.location_name}
+                  </a>
+                )}
                 <div className="bf-resource-bottom">
                   <span>
                     {r.services.every((s) => !s.price_cents)
@@ -236,7 +245,7 @@ export default function Overview() {
             <h3>{next ? 'Next on your calendar' : 'Full calendar? Stay in the running.'}</h3>
             <p>
               {next
-                ? `${next.resource_name} · ${dayLabel(next.starts_at,next.timezone)} · ${timeLabel(next.starts_at,next.timezone)}`
+                ? `${next.resource_name} · ${dayLabel(next.starts_at, next.timezone)} · ${timeLabel(next.starts_at, next.timezone)}`
                 : 'Join a waitlist. When a matching time opens up, we’ll hold it for you.'}
             </p>
           </div>

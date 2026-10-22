@@ -112,7 +112,10 @@ export default function Waitlist() {
               <input
                 type="date"
                 required
-                min={dateInZone(new Date(), resources.find(r=>r.id===resourceId)?.timezone??workspace.timezone)}
+                min={dateInZone(
+                  new Date(),
+                  resources.find((r) => r.id === resourceId)?.timezone ?? workspace.timezone,
+                )}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
@@ -173,8 +176,8 @@ export default function Waitlist() {
                     <Status value={e.status} />
                     <h3>{e.resource_name}</h3>
                     <p>
-                      {dayLabel(e.date.slice(0, 10))} · {e.earliest_time.slice(0, 5)}–
-                      {e.latest_time.slice(0, 5)} IST
+                      {dayLabel(e.date.slice(0, 10), e.timezone)} · {e.earliest_time.slice(0, 5)}–
+                      {e.latest_time.slice(0, 5)} {e.timezone}
                     </p>
                   </div>
                   {e.status === 'offered' ? (

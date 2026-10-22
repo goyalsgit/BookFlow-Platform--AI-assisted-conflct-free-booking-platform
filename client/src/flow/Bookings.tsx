@@ -22,24 +22,30 @@ export function HoldTimer({ expires }: { expires: string }) {
   );
 }
 export default function Bookings() {
-  const { user, signIn, toast } = useFlow();
-  const [bookings, setBookings] = useState<Booking[]>([]),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState(''),
-    [filter, setFilter] = useState('upcoming'),
-    [busy, setBusy] = useState(0),
-    [move, setMove] = useState<Booking | null>(null),
-    [cancel, setCancel] = useState<Booking | null>(null);
-  const refresh = () => {
+  const { user, toast } = useFlow();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('upcoming');
+  const [busy, setBusy] = useState(0);
+  const [move, setMove] = useState<Booking | null>(null);
+  const [cancel, setCancel] = useState<Booking | null>(null);
+
+  // Read current bookings from the API and update the displayed list.
+  async function refresh() {
     if (!user) {
       setLoading(false);
       return;
     }
-    request<Booking[]>('/bookings')
-      .then(setBookings)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  };
+    try {
+      const latestBookings = await request<Booking[]>('/bookings');
+      setBookings(latestBookings);
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Could not load bookings');
+    } finally {
+      setLoading(false);
+    }
+  }
   useEffect(() => {
     refresh();
     const t = setInterval(refresh, 15000);
@@ -70,15 +76,6 @@ export default function Bookings() {
       setBusy(0);
     }
   }
-  if (!user)
-    return (
-      <Empty title="Your plans, all in one place">
-        <p>Sign in to view reservations and confirm your held slots.</p>
-        <button className="bf-button primary" onClick={() => signIn()}>
-          Sign in
-        </button>
-      </Empty>
-    );
   const shown = bookings.filter(
     (b) =>
       filter === 'all' ||
@@ -142,7 +139,16 @@ export default function Bookings() {
                   <p>
                     {b.service_name} · {b.location_name}
                   </p>
-                  {mapsDirectionsUrl(b.location_name, b.location_address) && <a className="bf-directions-link" href={mapsDirectionsUrl(b.location_name, b.location_address)!} target="_blank" rel="noopener noreferrer"><Icon name="pin" size={14} /> Get directions</a>}
+                  {mapsDirectionsUrl(b.location_name, b.location_address) && (
+                    <a
+                      className="bf-directions-link"
+                      href={mapsDirectionsUrl(b.location_name, b.location_address)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Icon name="pin" size={14} /> Get directions
+                    </a>
+                  )}
                   <div className="bf-booking-time">
                     <span>
                       <Icon name="calendar" size={16} />
@@ -198,7 +204,8 @@ export default function Bookings() {
                         <strong>{e.event.replaceAll('_', ' ')}</strong>
                         <p>{e.detail}</p>
                         <small>
-                          {dayLabel(e.created_at,b.timezone)} · {timeLabel(e.created_at,b.timezone)} · {e.actor}
+                          {dayLabel(e.created_at, b.timezone)} ·{' '}
+                          {timeLabel(e.created_at, b.timezone)} · {e.actor}
                         </small>
                       </div>
                     </li>
@@ -235,7 +242,8 @@ export default function Bookings() {
           >
             <h2 id="cancel-heading">Release this reservation?</h2>
             <p className="bf-muted">
-              {cancel.resource_name} · {dayLabel(cancel.starts_at,cancel.timezone)} · {timeLabel(cancel.starts_at,cancel.timezone)}
+              {cancel.resource_name} · {dayLabel(cancel.starts_at, cancel.timezone)} ·{' '}
+              {timeLabel(cancel.starts_at, cancel.timezone)}
             </p>
             <p>
               Your time will become available to other customers. Confirmed bookings follow the
@@ -307,7 +315,7 @@ function Reschedule({
           New date
           <input
             type="date"
-            min={dateInZone(new Date(),booking.timezone)}
+            min={dateInZone(new Date(), booking.timezone)}
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
